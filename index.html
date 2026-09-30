@@ -37,17 +37,21 @@
 <main>
   <section>
     <div class="stage" id="stage">
-      <img id="chip" alt="hillshade chip" width="400" height="400">
+      <img id="chip" alt="hillshade chip" width="400" height="400" draggable="false">
       <canvas id="overlay" width="400" height="400"></canvas>
     </div>
     <p class="cursor-utm" id="cursor-utm">E —   N —</p>
+    <p class="trace-guidance">If the yellow line is off the real scarp, trace it; if it's on, just label.</p>
+    <p id="trace-banner" class="trace-banner" hidden>TRACE MODE: tap along the scarp · u undo · c clear · Enter done</p>
     <div class="tools">
+      <button type="button" id="trace-mode" class="trace-go">Trace (r)</button>
       <button type="button" id="mode-multi" class="on">Multidirectional</button>
       <button type="button" id="mode-dir">Across-strike sun (h)</button>
-      <button type="button" id="toggle-trace" class="on">Trace on (t)</button>
+      <button type="button" id="toggle-trace" class="on">Yellow line (t)</button>
       <button type="button" id="prev">Back (b)</button>
       <button type="button" id="next">Next (n)</button>
     </div>
+    <label class="check stay"><input type="checkbox" id="stay-to-trace" checked> After 1, stay to trace</label>
     <div class="keys" id="keys"></div>
     <p class="help" id="guidance"></p>
   </section>
@@ -63,8 +67,14 @@
     <textarea id="note" placeholder="optional note, saved with the label"></textarea>
     <label class="check"><input type="checkbox" id="wrong-location"> Wrong location (w)</label>
     <p class="legend"><span class="swatch qffdb"></span> orange lines: USGS Quaternary Fault and Fold Database</p>
-    <p class="legend"><span class="swatch trace"></span> yellow: detector trace / seed</p>
-    <p class="legend"><span class="swatch redraw"></span> click the chip to redraw · <span id="vertex-count">0 vertices</span> · <button type="button" id="clear-redraw">Clear (c)</button></p>
+    <p class="legend"><span class="swatch trace"></span> yellow: detector trace / seed; dashed grey: original seed estimate</p>
+    <p class="legend"><span class="swatch user-trace"></span> magenta: your trace of the true scarp · <span id="vertex-count">0 vertices</span></p>
+    <div class="trace-actions">
+      <button type="button" id="undo-point">Undo point (u)</button>
+      <button type="button" id="clear-trace">Clear trace (c)</button>
+      <button type="button" id="trace-done">Done</button>
+    </div>
+    <p id="trace-warn" class="trace-warn" hidden>Trace saved without a label. Export will call it unsure.</p>
     <div class="exports">
       <button type="button" id="export-csv" class="primary">Export CSV</button>
       <button type="button" id="export-geojson">Export GeoJSON</button>
@@ -77,8 +87,9 @@
 </main>
 <footer id="about">
   <h2>About</h2>
-  <p>Orange lines are the USGS Quaternary Fault and Fold Database. Yellow is the detector trace or seed. Green dots are your redraw (click the chip; c clears). White bar is 100 m; arrow is north. Keys 1–5 save a label and advance. n skips, b goes back, h swaps the hillshade, w toggles wrong location.</p>
-  <p>Redraw vertices are stored as UTM zone 11N, EPSG:32611. The chip image is centred in the tile CRS (NAD83 / UTM zone 11N), which sits about 1–2 m away from that frame.</p>
+  <p>Orange lines are the USGS Quaternary Fault and Fold Database. Yellow is the detector trace or seed. A dashed grey line, when present, is the original seed estimate. Magenta is your trace of the true scarp. If the yellow line is off the real scarp, trace it; if it's on, just label. White bar is 100 m; arrow is north.</p>
+  <p>Trace (r) starts trace mode: tap along the scarp, u undoes a point, c clears, Enter or Done saves and advances. Key 1 saves scarp and, when "After 1, stay to trace" is checked, stays on this chip in trace mode. Keys 2–5 save a label and advance. n skips, or finishes a trace; b goes back; h swaps the hillshade. w toggles wrong location, which is a separate flag from the trace.</p>
+  <p>Trace vertices are stored as UTM zone 11N, EPSG:32611, in the trace_utm32611 column (WKT). The chip image is centred in the tile CRS (NAD83 / UTM zone 11N), which sits about 1–2 m away from that frame.</p>
   <h2>Data</h2>
   <p>Chips are hillshades of USGS 3DEP 1 m lidar (public domain). Fault lines are from the U.S. Geological Survey Quaternary fault and fold database for the United States (public domain), accessed 2026-09-29, <a href="https://www.usgs.gov/natural-hazards/earthquake-hazards/faults">https://www.usgs.gov/natural-hazards/earthquake-hazards/faults</a>. 3DEP: <a href="https://www.usgs.gov/3d-elevation-program">https://www.usgs.gov/3d-elevation-program</a>. Candidate lineaments are from our own detector.</p>
   <h2>Labels</h2>

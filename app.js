@@ -1,6 +1,6 @@
-/* Static scarp review. Labels stay in localStorage until export. */
+/* Static scarp review. Labels and traces stay in localStorage until export. */
 (function () {
-  const COLUMNS = ["candidate_id","tile","label","reviewer","note","timestamp_utc","centroid_e","centroid_n","strike","length_m"];
+  const COLUMNS = ["candidate_id","tile","label","reviewer","note","timestamp_utc","centroid_e","centroid_n","strike","length_m","trace_utm32611"];
   const LABELS = ["scarp","road/rail/man-made","drainage","other","unsure"];
   const HELP = {
     "scarp": "Straight sharp step, often parallel to a mapped fault and offset about 100–200 m. Not a channel or a graded road.",
@@ -11,13 +11,16 @@
   };
   const STORE = "scarp_review_site_v1";
   const SEP = "\u0000";
+  const TAP_PX = 8;
 
   const chip = document.getElementById("chip");
   const overlay = document.getElementById("overlay");
+  const stage = document.getElementById("stage");
   const minimap = document.getElementById("minimap");
   const reviewerEl = document.getElementById("reviewer");
   const noteEl = document.getElementById("note");
   const wrongEl = document.getElementById("wrong-location");
+  const stayEl = document.getElementById("stay-to-trace");
   const savedEl = document.getElementById("saved");
   const state = {
     queue: [],
@@ -26,20 +29,40 @@
     filter: "all",
     mode: "multi",
     trace: true,
+    traceMode: false,
+    cursorChip: null,
     chipPx: 400,
     chipM: 400,
     store: loadStore(),
     drawToken: 0
   };
+  let activePtr = null;
 
   function loadStore() {
     try {
       const raw = JSON.parse(localStorage.getItem(STORE) || "null");
-      if (raw && raw.entries && typeof raw.entries === "object") {
-        return { version: 1, reviewer: String(raw.reviewer || ""), entries: raw.entries };
-      }
+      if (raw && raw.entries && typeof raw.entries === "object") return normalizeStore(raw);
     } catch (err) { /* empty store */ }
-    return { version: 1, reviewer: "", entries: {} };
+    return { version: 1, reviewer: "", stayToTrace: true, entries: {} };
+  }
+
+  function normalizeStore(data) {
+    const entries = data.entries && typeof data.entries === "object" ? data.entries : {};
+    Object.keys(entries).forEach(function (key) {
+      const entry = entries[key];
+      if (!entry || typeof entry !== "object") return;
+      if (!Array.isArray(entry.trace)) {
+        entry.trace = Array.isArray(entry.redraw) ? entry.redraw.slice() : [];
+      }
+      delete entry.redraw;
+      entry.wrong_location = !!entry.wrong_location;
+    });
+    return {
+      version: 1,
+      reviewer: String(data.reviewer || ""),
+      stayToTrace: typeof data.stayToTrace === "boolean" ? data.stayToTrace : true,
+      entries: entries
+    };
   }
 
   function reviewerName() {
@@ -48,6 +71,8 @@
 
   function persist() {
     state.store.reviewer = reviewerName();
+    state.store.stayToTrace = !!stayEl.checked;
+    state.store.version = 1;
     try { localStorage.setItem(STORE, JSON.stringify(state.store)); }
     catch (err) { /* private mode */ }
   }
@@ -69,10 +94,15 @@
         note: "",
         timestamp_utc: null,
         wrong_location: false,
-        redraw: []
+        trace: []
       };
     }
-    return state.store.entries[key];
+    const entry = state.store.entries[key];
+    if (!Array.isArray(entry.trace)) {
+      entry.trace = Array.isArray(entry.redraw) ? entry.redraw.slice() : [];
+      delete entry.redraw;
+    }
+    return entry;
   }
 
   function isLabelled(cand) {
@@ -143,6 +173,48 @@
     ];
   }
 
+  function escapeText(t) {
+    return String(t).replace(/[&<>"]/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[ch];
+    });
+  }
+
+  function drawUserTrace(ctx, cand, verts) {
+    ctx.strokeStyle = "#ff3fd8";
+    ctx.fillStyle = "#ff3fd8";
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    const xys = verts.map(function (utm) { return utmToChip(utm[0], utm[1], cand); });
+    if (xys.length) {
+      ctx.beginPath();
+      xys.forEach(function (xy, i) {
+        if (i === 0) ctx.moveTo(xy[0], xy[1]);
+        else ctx.lineTo(xy[0], xy[1]);
+      });
+      if (xys.length >= 2) ctx.stroke();
+      if (state.traceMode && state.cursorChip) {
+        const last = xys[xys.length - 1];
+        ctx.save();
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(last[0], last[1]);
+        ctx.lineTo(state.cursorChip[0], state.cursorChip[1]);
+        ctx.stroke();
+        ctx.restore();
+      }
+      xys.forEach(function (xy) {
+        ctx.beginPath();
+        ctx.arc(xy[0], xy[1], 4, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    } else if (state.traceMode && state.cursorChip) {
+      ctx.beginPath();
+      ctx.arc(state.cursorChip[0], state.cursorChip[1], 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
   function drawOverlay() {
     const ctx = overlay.getContext("2d");
     const px = state.chipPx;
@@ -152,6 +224,19 @@
     ctx.clearRect(0, 0, px, px);
     const cand = current();
     if (!cand) return;
+    if (state.trace && cand.trace_poly_est) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(230, 230, 230, 0.9)";
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([6, 5]);
+      ctx.beginPath();
+      cand.trace_poly_est.forEach(function (p, i) {
+        if (i === 0) ctx.moveTo(p[0] * scale, p[1] * scale);
+        else ctx.lineTo(p[0] * scale, p[1] * scale);
+      });
+      ctx.stroke();
+      ctx.restore();
+    }
     if (state.trace) {
       ctx.strokeStyle = "#ffe14a";
       ctx.lineWidth = 1.6;
@@ -170,24 +255,7 @@
       ctx.stroke();
     }
     const entry = getEntry(reviewerName(), cand.id);
-    const verts = (entry && entry.redraw) || [];
-    if (!verts.length) return;
-    ctx.strokeStyle = "#14a05a";
-    ctx.fillStyle = "#14a05a";
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    verts.forEach(function (utm, i) {
-      const xy = utmToChip(utm[0], utm[1], cand);
-      if (i === 0) ctx.moveTo(xy[0], xy[1]);
-      else ctx.lineTo(xy[0], xy[1]);
-    });
-    if (verts.length >= 2) ctx.stroke();
-    verts.forEach(function (utm) {
-      const xy = utmToChip(utm[0], utm[1], cand);
-      ctx.beginPath();
-      ctx.arc(xy[0], xy[1], 3.5, 0, Math.PI * 2);
-      ctx.fill();
-    });
+    drawUserTrace(ctx, cand, (entry && entry.trace) || []);
   }
 
   function progressText() {
@@ -219,6 +287,9 @@
     document.getElementById("mode-multi").classList.toggle("on", state.mode === "multi");
     document.getElementById("mode-dir").classList.toggle("on", state.mode === "dir");
     document.getElementById("toggle-trace").classList.toggle("on", state.trace);
+    document.getElementById("trace-mode").classList.toggle("on", state.traceMode);
+    stage.classList.toggle("tracing", state.traceMode);
+    document.getElementById("trace-banner").hidden = !state.traceMode;
     if (!cand) {
       chip.removeAttribute("src");
       minimap.removeAttribute("src");
@@ -228,6 +299,7 @@
       noteEl.value = "";
       wrongEl.checked = false;
       document.getElementById("vertex-count").textContent = "0 vertices";
+      document.getElementById("trace-warn").hidden = true;
       drawOverlay();
       return;
     }
@@ -261,7 +333,7 @@
       ["length", length],
       ["score", score],
       ["QFFDB fault:", qName + ", " + qDist + " m"]
-    ].map(function (pair) {
+    ].concat(cand.seed_status ? [["seed position:", escapeText(cand.seed_status)]] : []).map(function (pair) {
       return "<div><b>" + pair[0] + "</b> " + pair[1] + "</div>";
     }).join("");
     document.getElementById("seed-badge").hidden = !(cand.kind === "seed" || cand.seed === true);
@@ -274,8 +346,10 @@
     }).join("");
     noteEl.value = entry && entry.note ? entry.note : "";
     wrongEl.checked = !!(entry && entry.wrong_location);
-    const nVert = entry && entry.redraw ? entry.redraw.length : 0;
+    const nVert = entry && entry.trace ? entry.trace.length : 0;
     document.getElementById("vertex-count").textContent = nVert + (nVert === 1 ? " vertex" : " vertices");
+    const labelledOk = !!(entry && entry.label && LABELS.indexOf(entry.label) >= 0);
+    document.getElementById("trace-warn").hidden = !(nVert && !labelledOk);
     drawOverlay();
   }
 
@@ -283,7 +357,7 @@
     return Number(Number(value).toFixed(1));
   }
 
-  function encodeNote(text, wrong, redraw) {
+  function encodeNote(text, wrong) {
     let free = String(text || "");
     free = free.replace(/\s*\[wrong_location\]/g, "");
     free = free.replace(/\s*\[redraw_utm32611[^\]]*\]/g, "");
@@ -291,13 +365,21 @@
     const parts = [];
     if (free) parts.push(free);
     if (wrong) parts.push("[wrong_location]");
-    if (redraw && redraw.length) {
-      const body = redraw.map(function (p) {
-        return round1(p[0]).toFixed(1) + " " + round1(p[1]).toFixed(1);
-      }).join("; ");
-      parts.push("[redraw_utm32611 " + body + "]");
-    }
     return parts.join(" ");
+  }
+
+  function traceWkt(verts) {
+    if (!verts || !verts.length) return "";
+    const body = verts.map(function (p) {
+      return round1(p[0]).toFixed(1) + " " + round1(p[1]).toFixed(1);
+    }).join(", ");
+    if (verts.length === 1) return "POINT (" + body + ")";
+    return "LINESTRING (" + body + ")";
+  }
+
+  function exportLabel(entry) {
+    if (entry.label && LABELS.indexOf(entry.label) >= 0) return entry.label;
+    return "unsure";
   }
 
   function numOrZero(value) {
@@ -309,7 +391,7 @@
     return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
   }
 
-  function labelledEntries() {
+  function exportEntries() {
     const rows = [];
     Object.keys(state.store.entries).forEach(function (key) {
       const splitAt = key.indexOf(SEP);
@@ -317,7 +399,10 @@
       const reviewer = key.slice(0, splitAt);
       const id = key.slice(splitAt + 1);
       const entry = state.store.entries[key];
-      if (!entry || !entry.label) return;
+      if (!entry) return;
+      const labelled = entry.label && LABELS.indexOf(entry.label) >= 0;
+      const traced = entry.trace && entry.trace.length;
+      if (!labelled && !traced) return;
       const cand = state.byId[id];
       if (!cand) return;
       rows.push({ cand: cand, reviewer: reviewer, entry: entry });
@@ -340,14 +425,15 @@
     return {
       candidate_id: cand.id,
       tile: cand.tile || "",
-      label: entry.label,
+      label: exportLabel(entry),
       reviewer: item.reviewer,
-      note: encodeNote(entry.note, entry.wrong_location, entry.redraw),
+      note: encodeNote(entry.note, entry.wrong_location),
       timestamp_utc: entry.timestamp_utc || nowIso(),
       centroid_e: numOrZero(cand.centroid_e),
       centroid_n: numOrZero(cand.centroid_n),
       strike: numOrZero(cand.strike),
-      length_m: numOrZero(cand.length_m)
+      length_m: numOrZero(cand.length_m),
+      trace_utm32611: traceWkt(entry.trace || [])
     };
   }
 
@@ -369,7 +455,7 @@
   }
 
   function exportCsv() {
-    const items = labelledEntries();
+    const items = exportEntries();
     const lines = [COLUMNS.join(",")];
     items.forEach(function (item) {
       const row = rowFrom(item);
@@ -381,27 +467,32 @@
 
   function exportGeoJSON() {
     const features = [];
-    labelledEntries().forEach(function (item) {
+    exportEntries().forEach(function (item) {
       const row = rowFrom(item);
+      const props = {};
+      COLUMNS.forEach(function (col) { props[col] = row[col]; });
+      props.wrong_location = !!item.entry.wrong_location;
       features.push({
         type: "Feature",
         geometry: { type: "Point", coordinates: [row.centroid_e, row.centroid_n] },
-        properties: row
+        properties: props
       });
-      const verts = (item.entry.redraw || []).map(function (p) { return [round1(p[0]), round1(p[1])]; });
-      if (!item.entry.wrong_location && !verts.length) return;
-      let geometry = null;
-      if (verts.length >= 2) geometry = { type: "LineString", coordinates: verts };
-      else if (verts.length === 1) geometry = { type: "Point", coordinates: verts[0] };
+      const verts = (item.entry.trace || []).map(function (p) {
+        return [round1(p[0]), round1(p[1])];
+      });
+      if (!verts.length) return;
+      const geometry = verts.length >= 2
+        ? { type: "LineString", coordinates: verts }
+        : { type: "Point", coordinates: verts[0] };
       features.push({
         type: "Feature",
         geometry: geometry,
         properties: {
-          redraw_of: row.candidate_id,
+          candidate_id: row.candidate_id,
           reviewer: row.reviewer,
-          timestamp_utc: row.timestamp_utc,
           label: row.label,
-          wrong_location: !!item.entry.wrong_location
+          timestamp_utc: row.timestamp_utc,
+          kind: "trace"
         }
       });
     });
@@ -420,6 +511,22 @@
     savedEl.textContent = "Exported JSON backup.";
   }
 
+  function advance() {
+    state.traceMode = false;
+    const cand = current();
+    if (!cand) {
+      show();
+      return;
+    }
+    const stillThere = filtered().some(function (item) { return item.id === cand.id; });
+    if (stillThere) {
+      const idx = filtered().findIndex(function (item) { return item.id === cand.id; });
+      const list = filtered();
+      state.index = Math.min(list.length - 1, idx + 1);
+    }
+    show();
+  }
+
   function commit(label) {
     const cand = current();
     if (!cand) return;
@@ -431,46 +538,81 @@
     entry.timestamp_utc = nowIso();
     entry.wrong_location = wrongEl.checked;
     persist();
-    savedEl.textContent = "Saved " + label + " on " + cand.id;
-    const stillThere = filtered().some(function (item) { return item.id === cand.id; });
-    if (stillThere) {
+    if (label === "scarp" && stayEl.checked) {
+      state.traceMode = true;
       const idx = filtered().findIndex(function (item) { return item.id === cand.id; });
-      const list = filtered();
-      state.index = Math.min(list.length - 1, idx + 1);
+      if (idx >= 0) state.index = idx;
+      savedEl.textContent = "Saved scarp on " + cand.id + ". Trace the line, then Done.";
+      show();
+      return;
     }
-    show();
+    savedEl.textContent = "Saved " + label + " on " + cand.id;
+    advance();
   }
 
   function move(delta) {
+    state.traceMode = false;
     const list = filtered();
-    if (!list.length) return;
+    if (!list.length) {
+      show();
+      return;
+    }
     state.index = Math.max(0, Math.min(list.length - 1, state.index + delta));
     show();
   }
 
+  function enterTrace() {
+    if (!requireReviewer()) return;
+    state.traceMode = true;
+    savedEl.textContent = "Trace mode. Tap along the scarp.";
+    show();
+  }
+
+  function finishTrace() {
+    const cand = current();
+    if (cand && reviewerName()) {
+      const entry = ensureEntry(reviewerName(), cand.id);
+      entry.note = noteEl.value;
+      entry.wrong_location = wrongEl.checked;
+      if ((entry.trace && entry.trace.length) || entry.label) {
+        if (!entry.timestamp_utc) entry.timestamp_utc = nowIso();
+      }
+      persist();
+      savedEl.textContent = "Trace saved on " + cand.id;
+    }
+    move(1);
+  }
+
   function addVertex(ev) {
     const cand = current();
-    if (!cand || !requireReviewer()) return;
+    if (!cand || !state.traceMode || !requireReviewer()) return;
     const xy = eventToChip(ev);
     if (!xy) return;
     if (xy[0] < 0 || xy[1] < 0 || xy[0] > state.chipPx || xy[1] > state.chipPx) return;
     const utm = chipToUtm(xy[0], xy[1], cand);
     const entry = ensureEntry(reviewerName(), cand.id);
-    entry.redraw.push(utm);
+    entry.trace.push(utm);
+    if (!entry.timestamp_utc) entry.timestamp_utc = nowIso();
     persist();
-    const nVert = entry.redraw.length;
-    document.getElementById("vertex-count").textContent = nVert + (nVert === 1 ? " vertex" : " vertices");
-    drawOverlay();
+    show();
   }
 
-  function clearRedraw() {
+  function undoPoint() {
     const cand = current();
     if (!cand || !requireReviewer()) return;
     const entry = ensureEntry(reviewerName(), cand.id);
-    entry.redraw = [];
+    if (entry.trace.length) entry.trace.pop();
     persist();
-    document.getElementById("vertex-count").textContent = "0 vertices";
-    drawOverlay();
+    show();
+  }
+
+  function clearTrace() {
+    const cand = current();
+    if (!cand || !requireReviewer()) return;
+    const entry = ensureEntry(reviewerName(), cand.id);
+    entry.trace = [];
+    persist();
+    show();
   }
 
   function toggleWrong() {
@@ -524,19 +666,28 @@
     state.trace = !state.trace;
     show();
   });
+  document.getElementById("trace-mode").addEventListener("click", enterTrace);
+  document.getElementById("undo-point").addEventListener("click", undoPoint);
+  document.getElementById("clear-trace").addEventListener("click", clearTrace);
+  document.getElementById("trace-done").addEventListener("click", finishTrace);
   document.getElementById("prev").addEventListener("click", function () { move(-1); });
-  document.getElementById("next").addEventListener("click", function () { move(1); });
+  document.getElementById("next").addEventListener("click", function () {
+    if (state.traceMode) finishTrace();
+    else move(1);
+  });
   document.getElementById("jump-unlabelled").addEventListener("click", function () {
     const idx = filtered().findIndex(function (cand) { return !isLabelled(cand); });
     if (idx >= 0) state.index = idx;
+    state.traceMode = false;
     show();
   });
   document.getElementById("filter").addEventListener("change", function (ev) {
     state.filter = ev.target.value;
     state.index = 0;
+    state.traceMode = false;
     show();
   });
-  document.getElementById("clear-redraw").addEventListener("click", clearRedraw);
+  stayEl.addEventListener("change", function () { persist(); });
   wrongEl.addEventListener("change", function () {
     const cand = current();
     if (!cand || !requireReviewer()) {
@@ -558,17 +709,43 @@
     persist();
     show();
   });
-  document.getElementById("stage").addEventListener("click", addVertex);
-  document.getElementById("stage").addEventListener("mousemove", function (ev) {
+
+  stage.addEventListener("pointerdown", function (ev) {
+    if (!state.traceMode) return;
+    if (ev.pointerType === "mouse" && ev.button !== 0) return;
+    if (activePtr !== null) return;
+    activePtr = { id: ev.pointerId, x: ev.clientX, y: ev.clientY };
+    try { stage.setPointerCapture(ev.pointerId); } catch (err) { /* ignore */ }
+  });
+  stage.addEventListener("pointerup", function (ev) {
+    if (!activePtr || ev.pointerId !== activePtr.id) return;
+    const start = activePtr;
+    activePtr = null;
+    if (!state.traceMode) return;
+    const dx = ev.clientX - start.x;
+    const dy = ev.clientY - start.y;
+    if (Math.hypot(dx, dy) >= TAP_PX) return;
+    addVertex(ev);
+  });
+  stage.addEventListener("pointercancel", function (ev) {
+    if (activePtr && ev.pointerId === activePtr.id) activePtr = null;
+  });
+  stage.addEventListener("pointermove", function (ev) {
     const cand = current();
     if (!cand) return;
     const xy = eventToChip(ev);
     if (!xy) return;
     const utm = chipToUtm(xy[0], xy[1], cand);
     document.getElementById("cursor-utm").textContent = "E " + utm[0].toFixed(1) + "   N " + utm[1].toFixed(1);
+    if (state.traceMode) {
+      state.cursorChip = xy;
+      drawOverlay();
+    }
   });
-  document.getElementById("stage").addEventListener("mouseleave", function () {
+  stage.addEventListener("pointerleave", function () {
+    state.cursorChip = null;
     document.getElementById("cursor-utm").textContent = "E —   N —";
+    if (state.traceMode) drawOverlay();
   });
   chip.addEventListener("load", function () {
     if (chip.dataset.token === String(state.drawToken)) drawOverlay();
@@ -585,15 +762,13 @@
       try {
         const data = JSON.parse(String(reader.result));
         if (!data || typeof data.entries !== "object" || !data.entries) throw new Error("not a backup");
-        state.store = {
-          version: 1,
-          reviewer: String(data.reviewer || ""),
-          entries: data.entries
-        };
+        state.store = normalizeStore(data);
         reviewerEl.value = state.store.reviewer;
+        stayEl.checked = state.store.stayToTrace !== false;
         persist();
         const firstOpen = state.queue.findIndex(function (cand) { return !isLabelled(cand); });
         state.index = firstOpen >= 0 ? firstOpen : 0;
+        state.traceMode = false;
         show();
         savedEl.textContent = "Imported backup.";
       } catch (err) {
@@ -609,8 +784,14 @@
     if (key >= "1" && key <= "5") {
       ev.preventDefault();
       commit(LABELS[Number(key) - 1]);
+    } else if (key === "Enter") {
+      if (!state.traceMode) return;
+      ev.preventDefault();
+      finishTrace();
     } else if (key === "n" || key === "N") {
-      move(1);
+      ev.preventDefault();
+      if (state.traceMode) finishTrace();
+      else move(1);
     } else if (key === "b" || key === "B") {
       move(-1);
     } else if (key === "t" || key === "T") {
@@ -622,14 +803,21 @@
     } else if (key === "w" || key === "W") {
       ev.preventDefault();
       toggleWrong();
+    } else if (key === "r" || key === "R") {
+      ev.preventDefault();
+      enterTrace();
+    } else if (key === "u" || key === "U") {
+      ev.preventDefault();
+      undoPoint();
     } else if (key === "c" || key === "C") {
       ev.preventDefault();
-      clearRedraw();
+      clearTrace();
     }
   });
 
   buildKeys();
   if (state.store.reviewer) reviewerEl.value = state.store.reviewer;
+  stayEl.checked = state.store.stayToTrace !== false;
 
   loadQueue().then(function (payload) {
     state.queue = payload.candidates || [];

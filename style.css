@@ -8,7 +8,7 @@
   --accent: #8c2f2f;
   --ok: #0a7a32;
   --trace: #ffe14a;
-  --redraw: #14a05a;
+  --user-trace: #ff3fd8;
   --qffdb: #ff8c00;
 }
 * { box-sizing: border-box; }
@@ -54,8 +54,14 @@ main {
   position: relative;
   background: #111;
   width: min(100%, 640px);
-  cursor: crosshair;
+  cursor: default;
   user-select: none;
+  touch-action: auto;
+}
+.stage.tracing,
+.stage.tracing img {
+  cursor: crosshair;
+  touch-action: none;
 }
 .stage img { display: block; width: 100%; height: auto; }
 .stage canvas {
@@ -85,6 +91,29 @@ button, .file-btn {
 button:hover, .file-btn:hover { border-color: #888; }
 button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 button.on { outline: 2px solid var(--ink); }
+button.trace-go {
+  min-height: 48px;
+  font-size: 17px;
+  font-weight: 700;
+  padding: 12px 18px;
+  border: 2px solid var(--user-trace);
+}
+button.trace-go.on {
+  background: var(--user-trace);
+  color: #1a1016;
+  border-color: var(--user-trace);
+}
+.trace-banner {
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: var(--user-trace);
+  color: #1a1016;
+  font-weight: 700;
+  border-radius: 4px;
+}
+.trace-guidance { margin: 8px 0 0; font-weight: 650; }
+.trace-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.trace-warn { color: var(--accent); font-weight: 650; margin: 6px 0; }
 .keys button { min-width: 168px; text-align: left; }
 kbd {
   display: inline-block;
@@ -129,7 +158,7 @@ textarea { width: 100%; min-height: 72px; resize: vertical; }
 .legend { font-size: 12px; color: var(--muted); margin: 0; }
 .swatch { display: inline-block; width: 12px; height: 3px; margin: 0 4px 2px 0; vertical-align: middle; }
 .swatch.trace { background: var(--trace); }
-.swatch.redraw { background: var(--redraw); }
+.swatch.user-trace { background: var(--user-trace); height: 3px; }
 .swatch.qffdb { background: var(--qffdb); }
 .status { color: var(--ok); min-height: 1.2em; }
 .help { color: var(--muted); font-size: 13px; }
@@ -148,4 +177,22 @@ footer .warn { color: var(--accent); }
 @media (max-width: 900px) {
   main { grid-template-columns: 1fr; }
   .stage { width: min(100%, 640px); }
+}
+@media (max-width: 520px) {
+  header { padding: 8px; }
+  header > * { min-width: 0; max-width: 100%; }
+  main { padding: 0; gap: 8px; }
+  .stage { width: 100%; }
+  .tools, .keys, .cursor-utm, .trace-guidance, .trace-banner, #guidance, .check.stay {
+    margin-left: 8px;
+    margin-right: 8px;
+  }
+  aside { margin: 0 8px 8px; }
+  footer { padding: 8px 8px 24px; }
+  button, .file-btn, select, input[name="reviewer"] { min-height: 44px; }
+  button.trace-go { flex: 1 1 100%; }
+  label.rev, label.filt { width: 100%; }
+  label.rev input, label.filt select { flex: 1; min-width: 0; width: auto; max-width: 100%; }
+  .progress-wrap { min-width: 0; width: 100%; }
+  .keys button { min-width: 0; flex: 1 1 calc(50% - 8px); }
 }

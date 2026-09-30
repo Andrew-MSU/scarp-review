@@ -25,10 +25,21 @@
    "qffdb_dist_m": 88.0,
    "qffdb_name": "Shoshone Range fault zone",
    "seed": true,
+   "seed_status": "snapped 59 m NW, rotated +13\u00b0 onto the dark scarp band; check it",
    "short": "z11 x51y450",
    "strike": 44.9,
    "tile": "USGS_1M_11_x51y450_NV_NorthWestElko_2020_D20",
    "trace_poly": [
+    [
+     52.4,
+     225.2
+    ],
+    [
+     263.8,
+     91.7
+    ]
+   ],
+   "trace_poly_est": [
     [
      112.0,
      288.8
@@ -64,10 +75,21 @@
    "qffdb_dist_m": 413.3,
    "qffdb_name": "Shoshone Range fault zone",
    "seed": true,
+   "seed_status": "snapped 29 m E, rotated -7\u00b0 onto the dark scarp band; check it",
    "short": "z11 x51y450",
    "strike": 14.5,
    "tile": "USGS_1M_11_x51y450_NV_NorthWestElko_2020_D20",
    "trace_poly": [
+    [
+     164.0,
+     590.6
+    ],
+    [
+     291.6,
+     -174.2
+    ]
+   ],
+   "trace_poly_est": [
     [
      90.1,
      571.8
@@ -103,10 +125,81 @@
    "qffdb_dist_m": 398.9,
    "qffdb_name": "Shoshone Range fault zone",
    "seed": true,
+   "seed_status": "needs redraw: estimate from a screen-grab loop, no clear scarp at this position; press r (Trace) and tap along the scarp",
    "short": "z11 x51y450",
    "strike": 33.5,
    "tile": "USGS_1M_11_x51y450_NV_NorthWestElko_2020_D20",
    "trace_poly": [
+    [
+     -230.1,
+     895.9
+    ],
+    [
+     -251.3,
+     851.8
+    ],
+    [
+     -255.2,
+     819.2
+    ],
+    [
+     -256.2,
+     668.6
+    ],
+    [
+     -250.0,
+     612.7
+    ],
+    [
+     -229.0,
+     566.7
+    ],
+    [
+     -100.4,
+     382.0
+    ],
+    [
+     109.1,
+     100.9
+    ],
+    [
+     258.7,
+     -69.9
+    ],
+    [
+     294.8,
+     -105.9
+    ],
+    [
+     322.3,
+     -117.7
+    ],
+    [
+     407.0,
+     -151.5
+    ],
+    [
+     506.7,
+     -175.4
+    ],
+    [
+     653.7,
+     -167.9
+    ],
+    [
+     738.6,
+     -141.6
+    ],
+    [
+     823.3,
+     -265.4
+    ],
+    [
+     858.0,
+     -302.4
+    ]
+   ],
+   "trace_poly_est": [
     [
      -230.1,
      895.9
@@ -202,10 +295,73 @@
    "qffdb_dist_m": 225.8,
    "qffdb_name": "Shoshone Range fault zone",
    "seed": true,
+   "seed_status": "needs redraw: estimate from a screen-grab loop, no clear scarp at this position; press r (Trace) and tap along the scarp",
    "short": "z11 x51y450",
    "strike": 31.2,
    "tile": "USGS_1M_11_x51y450_NV_NorthWestElko_2020_D20",
    "trace_poly": [
+    [
+     96.4,
+     616.5
+    ],
+    [
+     116.1,
+     599.1
+    ],
+    [
+     167.5,
+     513.4
+    ],
+    [
+     162.9,
+     393.8
+    ],
+    [
+     -130.4,
+     187.3
+    ],
+    [
+     -78.1,
+     102.0
+    ],
+    [
+     -30.0,
+     43.4
+    ],
+    [
+     280.9,
+     202.2
+    ],
+    [
+     315.3,
+     193.8
+    ],
+    [
+     354.1,
+     129.6
+    ],
+    [
+     361.5,
+     104.8
+    ],
+    [
+     347.2,
+     67.0
+    ],
+    [
+     312.3,
+     16.7
+    ],
+    [
+     353.9,
+     -75.0
+    ],
+    [
+     370.2,
+     -94.4
+    ]
+   ],
+   "trace_poly_est": [
     [
      96.4,
      616.5
