@@ -1,0 +1,151 @@
+:root {
+  color-scheme: light;
+  --ink: #1c1915;
+  --muted: #5e584f;
+  --line: #d9d3c8;
+  --paper: #f6f3ee;
+  --card: #fff;
+  --accent: #8c2f2f;
+  --ok: #0a7a32;
+  --trace: #ffe14a;
+  --redraw: #14a05a;
+  --qffdb: #ff8c00;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 15px/1.45 "Segoe UI", Helvetica, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+header h1 { font-size: 16px; margin: 0; font-weight: 650; }
+.progress-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 220px; }
+.bar { height: 8px; background: #e6e0d6; border-radius: 99px; overflow: hidden; }
+.bar > span { display: block; height: 100%; width: 0%; background: var(--accent); }
+#progress, #position { font-variant-numeric: tabular-nums; }
+#position { color: var(--muted); font-size: 13px; }
+label.rev, label.filt { display: flex; gap: 6px; align-items: center; }
+input[type="text"], textarea, select {
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: #fff;
+  color: inherit;
+}
+input[name="reviewer"] { width: 160px; }
+main {
+  display: grid;
+  grid-template-columns: minmax(420px, 680px) minmax(260px, 340px);
+  gap: 16px;
+  padding: 14px 16px 8px;
+  align-items: start;
+}
+.stage {
+  position: relative;
+  background: #111;
+  width: min(100%, 640px);
+  cursor: crosshair;
+  user-select: none;
+}
+.stage img { display: block; width: 100%; height: auto; }
+.stage canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.cursor-utm {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--muted);
+  margin: 6px 0 0;
+}
+.tools, .exports, .keys { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+button, .file-btn {
+  font: inherit;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+  color: inherit;
+}
+button:hover, .file-btn:hover { border-color: #888; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.on { outline: 2px solid var(--ink); }
+.keys button { min-width: 168px; text-align: left; }
+kbd {
+  display: inline-block;
+  min-width: 1.1em;
+  font-weight: 700;
+  font-family: inherit;
+}
+aside {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+aside h2 {
+  font-size: 13px;
+  margin: 12px 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #666;
+}
+aside h2:first-child { margin-top: 0; }
+.map { width: 200px; height: 200px; background: #222; display: block; }
+.meta { font-variant-numeric: tabular-nums; }
+.meta div { margin: 2px 0; }
+.flags { display: flex; flex-wrap: wrap; gap: 4px; }
+.flag { font-size: 12px; padding: 1px 6px; border-radius: 99px; background: #eee; }
+.flag.on { background: #f3c7c7; }
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: #f3d48a;
+  color: #3d2e08;
+  border-radius: 99px;
+  padding: 1px 7px;
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+textarea { width: 100%; min-height: 72px; resize: vertical; }
+.check { display: flex; gap: 6px; align-items: center; margin: 8px 0; }
+.legend { font-size: 12px; color: var(--muted); margin: 0; }
+.swatch { display: inline-block; width: 12px; height: 3px; margin: 0 4px 2px 0; vertical-align: middle; }
+.swatch.trace { background: var(--trace); }
+.swatch.redraw { background: var(--redraw); }
+.swatch.qffdb { background: var(--qffdb); }
+.status { color: var(--ok); min-height: 1.2em; }
+.help { color: var(--muted); font-size: 13px; }
+.file-btn input { display: none; }
+footer { padding: 4px 16px 24px; color: #666; font-size: 13px; }
+footer h2 {
+  font-size: 12px;
+  margin: 14px 0 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #666;
+}
+footer p { margin: 0.35em 0; }
+footer a { color: inherit; }
+footer .warn { color: var(--accent); }
+@media (max-width: 900px) {
+  main { grid-template-columns: 1fr; }
+  .stage { width: min(100%, 640px); }
+}

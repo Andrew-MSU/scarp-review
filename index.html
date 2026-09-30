@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Scarp review</title>
+<link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Scarp review</h1>
+  <div class="progress-wrap">
+    <div class="bar" aria-hidden="true"><span id="progress-bar"></span></div>
+    <span id="progress">loading…</span>
+    <span id="position"></span>
+  </div>
+  <label class="rev">Reviewer
+    <input name="reviewer" id="reviewer" list="reviewers" placeholder="Andrew or Donggun" autocomplete="off">
+    <datalist id="reviewers">
+      <option value="Andrew"></option>
+      <option value="Donggun"></option>
+    </datalist>
+  </label>
+  <label class="filt">Filter
+    <select id="filter">
+      <option value="all">All</option>
+      <option value="seeds">Seeds</option>
+      <option value="near">Near QFFDB fault (≤ 500 m)</option>
+      <option value="unlabelled">Unlabelled</option>
+    </select>
+  </label>
+  <button type="button" id="jump-unlabelled">First unlabelled</button>
+  <span id="saved" class="status"></span>
+</header>
+<main>
+  <section>
+    <div class="stage" id="stage">
+      <img id="chip" alt="hillshade chip" width="400" height="400">
+      <canvas id="overlay" width="400" height="400"></canvas>
+    </div>
+    <p class="cursor-utm" id="cursor-utm">E —   N —</p>
+    <div class="tools">
+      <button type="button" id="mode-multi" class="on">Multidirectional</button>
+      <button type="button" id="mode-dir">Across-strike sun (h)</button>
+      <button type="button" id="toggle-trace" class="on">Trace on (t)</button>
+      <button type="button" id="prev">Back (b)</button>
+      <button type="button" id="next">Next (n)</button>
+    </div>
+    <div class="keys" id="keys"></div>
+    <p class="help" id="guidance"></p>
+  </section>
+  <aside>
+    <h2>Context</h2>
+    <img id="minimap" class="map" alt="context map" width="200" height="200">
+    <p class="help">Red box is this 400 m chip. Yellow dot is the candidate.</p>
+    <h2>Candidate <span id="seed-badge" class="badge" hidden>seed</span></h2>
+    <div class="meta" id="meta"></div>
+    <h2>Mask flags</h2>
+    <div class="flags" id="flags"></div>
+    <h2>Note</h2>
+    <textarea id="note" placeholder="optional note, saved with the label"></textarea>
+    <label class="check"><input type="checkbox" id="wrong-location"> Wrong location (w)</label>
+    <p class="legend"><span class="swatch qffdb"></span> orange lines: USGS Quaternary Fault and Fold Database</p>
+    <p class="legend"><span class="swatch trace"></span> yellow: detector trace / seed</p>
+    <p class="legend"><span class="swatch redraw"></span> click the chip to redraw · <span id="vertex-count">0 vertices</span> · <button type="button" id="clear-redraw">Clear (c)</button></p>
+    <div class="exports">
+      <button type="button" id="export-csv" class="primary">Export CSV</button>
+      <button type="button" id="export-geojson">Export GeoJSON</button>
+      <button type="button" id="export-json">Export JSON backup</button>
+      <label class="file-btn">Import JSON backup
+        <input type="file" id="import-json" accept="application/json,.json">
+      </label>
+    </div>
+  </aside>
+</main>
+<footer id="about">
+  <h2>About</h2>
+  <p>Orange lines are the USGS Quaternary Fault and Fold Database. Yellow is the detector trace or seed. Green dots are your redraw (click the chip; c clears). White bar is 100 m; arrow is north. Keys 1–5 save a label and advance. n skips, b goes back, h swaps the hillshade, w toggles wrong location.</p>
+  <p>Redraw vertices are stored as UTM zone 11N, EPSG:32611. The chip image is centred in the tile CRS (NAD83 / UTM zone 11N), which sits about 1–2 m away from that frame.</p>
+  <h2>Data</h2>
+  <p>Chips are hillshades of USGS 3DEP 1 m lidar (public domain). Fault lines are from the U.S. Geological Survey Quaternary fault and fold database for the United States (public domain), accessed 2026-09-29, <a href="https://www.usgs.gov/natural-hazards/earthquake-hazards/faults">https://www.usgs.gov/natural-hazards/earthquake-hazards/faults</a>. 3DEP: <a href="https://www.usgs.gov/3d-elevation-program">https://www.usgs.gov/3d-elevation-program</a>. Candidate lineaments are from our own detector.</p>
+  <h2>Labels</h2>
+  <p>Labels stay in your browser (localStorage) until you export them. Send exported CSV/GeoJSON files to the team privately; they are merged into our private project repository with scripts/review_import_labels.py. Never commit label exports to this public repository or open issues/PRs containing them.</p>
+</footer>
+<script src="candidates.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
