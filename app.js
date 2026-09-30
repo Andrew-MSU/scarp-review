@@ -56,6 +56,10 @@
       }
       delete entry.redraw;
       entry.wrong_location = !!entry.wrong_location;
+      // A drawn line with no class was the Enter-without-1 case. That line is a scarp.
+      if (Array.isArray(entry.trace) && entry.trace.length >= 2 && !entry.label) {
+        entry.label = "scarp";
+      }
     });
     return {
       version: 1,
@@ -71,7 +75,7 @@
 
   function persist() {
     state.store.reviewer = reviewerName();
-    state.store.stayToTrace = !!stayEl.checked;
+    state.store.stayToTrace = true;
     state.store.version = 1;
     try { localStorage.setItem(STORE, JSON.stringify(state.store)); }
     catch (err) { /* private mode */ }
@@ -105,9 +109,19 @@
     return entry;
   }
 
+  function traceCount(entry) {
+    return entry && Array.isArray(entry.trace) ? entry.trace.length : 0;
+  }
+
+  function hasScarpTrace(entry) {
+    return traceCount(entry) >= 2;
+  }
+
   function isLabelled(cand) {
     const entry = getEntry(reviewerName(), cand.id);
-    return !!(entry && entry.label && LABELS.indexOf(entry.label) >= 0);
+    if (!entry || !entry.label || LABELS.indexOf(entry.label) < 0) return false;
+    if (entry.label === "scarp") return hasScarpTrace(entry);
+    return true;
   }
 
   function filtered() {
@@ -265,8 +279,9 @@
     let k = 0;
     const rev = reviewerName();
     state.queue.forEach(function (cand) {
+      if (!isLabelled(cand)) return;
       const entry = getEntry(rev, cand.id);
-      if (!entry || !entry.label || counts[entry.label] == null) return;
+      if (!entry || counts[entry.label] == null) return;
       counts[entry.label] += 1;
       k += 1;
     });
@@ -349,8 +364,19 @@
     wrongEl.checked = !!(entry && entry.wrong_location);
     const nVert = entry && entry.trace ? entry.trace.length : 0;
     document.getElementById("vertex-count").textContent = nVert + (nVert === 1 ? " vertex" : " vertices");
-    const labelledOk = !!(entry && entry.label && LABELS.indexOf(entry.label) >= 0);
-    document.getElementById("trace-warn").hidden = !(nVert && !labelledOk);
+    const warn = document.getElementById("trace-warn");
+    if (entry && entry.label === "scarp" && !hasScarpTrace(entry)) {
+      warn.hidden = false;
+      warn.textContent = "A scarp needs a trace of at least two points.";
+    } else if (nVert === 1) {
+      warn.hidden = false;
+      warn.textContent = "One point so far. Add another, then Enter saves a scarp.";
+    } else if (nVert >= 2 && (!entry || entry.label !== "scarp")) {
+      warn.hidden = false;
+      warn.textContent = "Enter saves this trace as a scarp.";
+    } else {
+      warn.hidden = true;
+    }
     drawOverlay();
   }
 
@@ -379,6 +405,8 @@
   }
 
   function exportLabel(entry) {
+    if (hasScarpTrace(entry)) return "scarp";
+    if (entry.label && LABELS.indexOf(entry.label) >= 0 && entry.label !== "scarp") return entry.label;
     if (entry.label && LABELS.indexOf(entry.label) >= 0) return entry.label;
     return "unsure";
   }
@@ -534,19 +562,23 @@
     if (!requireReviewer()) return;
     const reviewer = reviewerName();
     const entry = ensureEntry(reviewer, cand.id);
+    if (label !== "scarp" && hasScarpTrace(entry)) {
+      savedEl.textContent = "This trace is a scarp. Clear it before choosing another label.";
+      return;
+    }
+    if (label === "scarp" && !hasScarpTrace(entry)) {
+      state.traceMode = true;
+      const idx = filtered().findIndex(function (item) { return item.id === cand.id; });
+      if (idx >= 0) state.index = idx;
+      savedEl.textContent = "Trace the scarp (at least two points), then Enter.";
+      show();
+      return;
+    }
     entry.label = label;
     entry.note = noteEl.value;
     entry.timestamp_utc = nowIso();
     entry.wrong_location = wrongEl.checked;
     persist();
-    if (label === "scarp" && stayEl.checked) {
-      state.traceMode = true;
-      const idx = filtered().findIndex(function (item) { return item.id === cand.id; });
-      if (idx >= 0) state.index = idx;
-      savedEl.textContent = "Saved scarp on " + cand.id + ". Trace the line, then Done.";
-      show();
-      return;
-    }
     savedEl.textContent = "Saved " + label + " on " + cand.id;
     advance();
   }
@@ -571,16 +603,29 @@
 
   function finishTrace() {
     const cand = current();
-    if (cand && reviewerName()) {
-      const entry = ensureEntry(reviewerName(), cand.id);
-      entry.note = noteEl.value;
-      entry.wrong_location = wrongEl.checked;
-      if ((entry.trace && entry.trace.length) || entry.label) {
-        if (!entry.timestamp_utc) entry.timestamp_utc = nowIso();
-      }
-      persist();
-      savedEl.textContent = "Trace saved on " + cand.id;
+    if (!cand || !reviewerName()) {
+      move(1);
+      return;
     }
+    const entry = ensureEntry(reviewerName(), cand.id);
+    entry.note = noteEl.value;
+    entry.wrong_location = wrongEl.checked;
+    const n = traceCount(entry);
+    if (n === 1) {
+      persist();
+      savedEl.textContent = "Add at least one more point, then Enter.";
+      show();
+      return;
+    }
+    if (n >= 2) {
+      entry.label = "scarp";
+      entry.timestamp_utc = nowIso();
+      persist();
+      savedEl.textContent = "Saved scarp on " + cand.id;
+      move(1);
+      return;
+    }
+    persist();
     move(1);
   }
 
@@ -603,6 +648,7 @@
     if (!cand || !requireReviewer()) return;
     const entry = ensureEntry(reviewerName(), cand.id);
     if (entry.trace.length) entry.trace.pop();
+    if (entry.label === "scarp" && !hasScarpTrace(entry)) entry.label = null;
     persist();
     show();
   }
@@ -612,6 +658,7 @@
     if (!cand || !requireReviewer()) return;
     const entry = ensureEntry(reviewerName(), cand.id);
     entry.trace = [];
+    if (entry.label === "scarp") entry.label = null;
     persist();
     show();
   }
@@ -688,7 +735,7 @@
     state.traceMode = false;
     show();
   });
-  stayEl.addEventListener("change", function () { persist(); });
+  if (stayEl) stayEl.addEventListener("change", function () { persist(); });
   wrongEl.addEventListener("change", function () {
     const cand = current();
     if (!cand || !requireReviewer()) {
@@ -765,7 +812,7 @@
         if (!data || typeof data.entries !== "object" || !data.entries) throw new Error("not a backup");
         state.store = normalizeStore(data);
         reviewerEl.value = state.store.reviewer;
-        stayEl.checked = state.store.stayToTrace !== false;
+        if (stayEl) stayEl.checked = state.store.stayToTrace !== false;
         persist();
         const firstOpen = state.queue.findIndex(function (cand) { return !isLabelled(cand); });
         state.index = firstOpen >= 0 ? firstOpen : 0;
@@ -817,7 +864,7 @@
   });
 
   buildKeys();
-  stayEl.checked = state.store.stayToTrace !== false;
+  if (stayEl) stayEl.checked = state.store.stayToTrace !== false;
   const requested = new URLSearchParams(window.location.search).get("reviewer");
   const knownReviewer = { Andrew: 1, Donggun: 1, Walker: 1 };
   if (requested && knownReviewer[requested.trim()]) {

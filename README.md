@@ -34,8 +34,7 @@ Yellow is the detector trace or seed. A dashed grey line, when present, is
 the original seed estimate. Magenta is your trace of the true scarp. The
 white bar is 100 m and the arrow is north.
 
-If the yellow line is off the real scarp, trace it. If it is on the scarp,
-just label.
+If it is a scarp, trace it. Enter saves that line as scarp.
 
 Chrome blocks `fetch` of `candidates.json` on `file://`. `candidates.js`
 sets `window.QUEUE` and the page uses that when fetch fails. Over http either
@@ -45,7 +44,7 @@ file works; fetch is preferred.
 
 | Key | Action |
 |---|---|
-| 1 | scarp — straight sharp step, often parallel to a mapped fault and offset about 100–200 m; not a channel or a graded road. With **After 1, stay to trace** checked (the default), stays on this chip and opens trace mode |
+| 1 | scarp — straight sharp step, often parallel to a mapped fault and offset about 100–200 m; not a channel or a graded road. Opens trace mode. The scarp is saved only after a trace of at least two points |
 | 2 | road/rail/man-made — cut, berm, or embankment following a road, railroad, canal, or other built alignment |
 | 3 | drainage — sinuous channel, gully, or valley edge that winds with the slope |
 | 4 | other — a real linear feature that is none of the above (joint, terrace, fan boundary, artefact) |
@@ -53,31 +52,32 @@ file works; fetch is preferred.
 | r | enter trace mode |
 | u | undo the last trace vertex |
 | c | clear the trace on this candidate |
-| Enter | in trace mode, save the trace and advance |
-| n | next candidate; in trace mode, save the trace and advance |
+| Enter | in trace mode, save a two-point trace as scarp and advance. One point stays here. No points advances without a label |
+| n | next candidate; in trace mode, same as Enter |
 | b | back |
 | t | toggle the yellow candidate trace |
 | h | switch multidirectional hillshade / sun perpendicular to strike |
 | w | toggle "wrong location" (a flag, separate from the trace) |
 
-Keys 2–5 save a label and move to the next candidate. Key 1 does that only
-when **After 1, stay to trace** is unchecked. The checkbox is remembered in
-this browser. Labelling the same candidate again replaces your previous row
-(one row per reviewer and candidate). Keys are ignored while the cursor is
-in the name or note field.
+Keys 2–5 save a label and move to the next candidate. Key 1 opens trace mode
+until the line has two points. Enter then saves it as scarp. A trace cannot
+be labelled as anything else until it is cleared. Labelling the same candidate
+again replaces your previous row (one row per reviewer and candidate). Keys
+are ignored while the cursor is in the name or note field.
 
 ## Trace
 
 **Trace** (r) enters trace mode. Each tap on the chip adds a vertex along the
 true scarp. The line under the chip is the cursor's easting and northing.
 **Undo point** (u) removes the last vertex. **Clear trace** (c) removes them
-all. **Done**, Enter, or n saves and moves to the next candidate. On a phone,
+all. **Done**, Enter, or n with two or more points saves the label scarp and moves
+to the next candidate. One point stays on this chip. On a phone,
 a tap is a pointer-up that moved less than 8 px, and the chip ignores page
 scroll only while trace mode is on.
 
 The trace is drawn in magenta (`#ff3fd8`), 2.5 px, with a dot on each vertex.
-Vertices are stored as UTM zone 11N (EPSG:32611), not as pixels. A trace can
-be saved before you pick a label. The page warns you when that happens.
+Vertices are stored as UTM zone 11N (EPSG:32611), not as pixels. A trace of
+two or more points is a scarp. Clearing the trace clears that scarp label.
 
 **Wrong location** (w) is independent. It does not start a trace and it does
 not move the yellow line. Use it when the candidate is simply in the wrong
@@ -96,9 +96,9 @@ place and you are not drawing a replacement.
 `trace_utm32611` is WKT in EPSG:32611. Two or more vertices are
 `LINESTRING (E N, E N, ...)` with each coordinate to 1 decimal. One vertex is
 `POINT (E N)`. The cell is empty when you did not trace. A row is exported
-when it has a label or a trace. The label is the one you set. It is `scarp`
-only when you labelled it scarp. A trace with no label is exported as
-`unsure`.
+when it has a label or a trace. A trace of two or more points is exported as
+`scarp`. A row with no trace and no label is not exported. `unsure` is only
+the class chosen with key 5.
 
 `[wrong_location]` is still appended to the free text of `note` when that
 flag is set. New exports do not put the trace in the note. Older files may
