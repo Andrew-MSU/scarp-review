@@ -134,6 +134,7 @@
       }
       if (mode === "unlabelled") return !isLabelled(cand);
       if (mode === "batch2") return Number(cand.batch) === 2;
+      if (mode === "batch3") return Number(cand.batch) === 3;
       return true;
     });
   }
@@ -296,7 +297,7 @@
     const prog = progressText();
     document.getElementById("progress").textContent = state.queue.length ? prog.text : "no candidates";
     document.getElementById("progress-bar").style.width = prog.n ? (100 * prog.k / prog.n) + "%" : "0%";
-    const filterLabel = { all: "all", seeds: "seeds", near: "near QFFDB", unlabelled: "unlabelled", batch2: "batch 2" }[state.filter] || "all";
+    const filterLabel = { all: "all", seeds: "seeds", near: "near QFFDB", unlabelled: "unlabelled", batch2: "batch 2", batch3: "batch 3" }[state.filter] || "all";
     document.getElementById("position").textContent = list.length
       ? ((state.index + 1) + " / " + list.length + " " + filterLabel)
       : ("0 " + filterLabel);
@@ -880,8 +881,8 @@
     state.chipM = Number(payload.chip_m) || state.chipPx;
     state.byId = {};
     state.queue.forEach(function (cand) { state.byId[cand.id] = cand; });
-    state.filter = "batch2";
-    document.getElementById("filter").value = "batch2";
+    state.filter = "batch3";
+    document.getElementById("filter").value = "batch3";
     const firstOpen = filtered().findIndex(function (cand) { return !isLabelled(cand); });
     state.index = firstOpen >= 0 ? firstOpen : 0;
     show();

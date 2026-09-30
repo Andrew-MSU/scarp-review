@@ -19,12 +19,13 @@ so GitHub Pages serves the files as they are.
 3. One candidate at a time. The multidirectional hillshade is shown first.
    The small map is a 2 km context with this chip outlined.
 
-The page opens on Batch 2. Those chips are new off-road lineaments from the
-Elko tile and the Reno QL2 tile. The first 216 candidates are still in the
-queue. Filter with Batch 2, All, Seeds, Near QFFDB fault (≤ 500 m), or
-Unlabelled, or jump to the first candidate you have not labelled. Labels
-already stored in this browser stay attached to the original ids. The bar
-reads `labelled k / n` plus a count for each class.
+The page opens on Batch 3. Those 248 chips are off-road lineaments from the
+Reno QL2 tile (x29y437) that were not in the first 277. Batch 2 (61 chips,
+Elko and Reno QL2) and the first 216 candidates stay in the queue. Filter
+with Batch 3, Batch 2, All, Seeds, Near QFFDB fault (≤ 500 m), or Unlabelled,
+or jump to the first candidate you have not labelled. Labels already stored
+in this browser stay attached to the original ids. The bar reads
+`labelled k / n` plus a count for each class.
 
 Seeds (`seed-elko-1` … `seed-elko-4`) wear a seed badge. They are four
 example lines in the Elko area. They start unlabelled in this browser.
