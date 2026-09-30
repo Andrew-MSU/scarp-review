@@ -11,8 +11,11 @@ so GitHub Pages serves the files as they are.
 ## Use
 
 1. Open the page.
-2. Type your name in Reviewer. The browser remembers it. Labels are refused
-   until the name is set.
+2. Type your name in Reviewer (Andrew, Donggun, or Walker). The browser
+   remembers it. Labels are refused until the name is set. Walker's link,
+   with the name filled in, is
+   <https://andrew-msu.github.io/scarp-review/?reviewer=Walker>.
+   Each name keeps its own labels.
 3. One candidate at a time. The multidirectional hillshade is shown first.
    The small map is a 2 km context with this chip outlined.
 

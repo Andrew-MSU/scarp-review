@@ -817,8 +817,15 @@
   });
 
   buildKeys();
-  if (state.store.reviewer) reviewerEl.value = state.store.reviewer;
   stayEl.checked = state.store.stayToTrace !== false;
+  const requested = new URLSearchParams(window.location.search).get("reviewer");
+  const knownReviewer = { Andrew: 1, Donggun: 1, Walker: 1 };
+  if (requested && knownReviewer[requested.trim()]) {
+    reviewerEl.value = requested.trim();
+    persist();
+  } else if (state.store.reviewer) {
+    reviewerEl.value = state.store.reviewer;
+  }
 
   loadQueue().then(function (payload) {
     state.queue = payload.candidates || [];
