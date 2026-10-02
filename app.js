@@ -117,10 +117,14 @@
     return traceCount(entry) >= 2;
   }
 
+  function isBlind(cand) {
+    return !!(cand && Number(cand.batch) === 4);
+  }
+
   function isLabelled(cand) {
     const entry = getEntry(reviewerName(), cand.id);
     if (!entry || !entry.label || LABELS.indexOf(entry.label) < 0) return false;
-    if (entry.label === "scarp") return hasScarpTrace(entry);
+    if (entry.label === "scarp" && !isBlind(cand)) return hasScarpTrace(entry);
     return true;
   }
 
@@ -135,6 +139,7 @@
       if (mode === "unlabelled") return !isLabelled(cand);
       if (mode === "batch2") return Number(cand.batch) === 2;
       if (mode === "batch3") return Number(cand.batch) === 3;
+      if (mode === "batch4") return Number(cand.batch) === 4;
       return true;
     });
   }
@@ -240,7 +245,7 @@
     ctx.clearRect(0, 0, px, px);
     const cand = current();
     if (!cand) return;
-    if (state.trace && cand.trace_poly_est) {
+    if (state.trace && cand.trace_poly_est && !isBlind(cand)) {
       ctx.save();
       ctx.strokeStyle = "rgba(230, 230, 230, 0.9)";
       ctx.lineWidth = 1.2;
@@ -254,7 +259,7 @@
       ctx.restore();
     }
     if (state.trace) {
-      ctx.strokeStyle = "#ffe14a";
+      ctx.strokeStyle = isBlind(cand) ? "#d0d0d0" : "#ffe14a";
       ctx.lineWidth = 1.6;
       ctx.lineJoin = "round";
       ctx.beginPath();
@@ -294,10 +299,27 @@
   function show() {
     const list = filtered();
     const cand = current();
+    document.body.classList.toggle("blind", isBlind(cand));
+    // The fault-distance filter is for batches 1–3. Keep it out of the
+    // blind page so the current chip is not described by a fault name.
+    const filter = document.getElementById("filter");
+    let nearOpt = filter.querySelector("option[value='near']");
+    if (isBlind(cand)) {
+      if (nearOpt) nearOpt.remove();
+    } else if (!nearOpt) {
+      nearOpt = document.createElement("option");
+      nearOpt.value = "near";
+      nearOpt.textContent = "Near QFFDB fault (\u2264 500 m)";
+      const unlab = filter.querySelector("option[value='unlabelled']");
+      filter.insertBefore(nearOpt, unlab);
+    }
+    const banner = document.getElementById("batch4-banner");
+    if (banner) banner.hidden = !isBlind(cand);
+    if (isBlind(cand)) document.getElementById("cursor-utm").textContent = "";
     const prog = progressText();
     document.getElementById("progress").textContent = state.queue.length ? prog.text : "no candidates";
     document.getElementById("progress-bar").style.width = prog.n ? (100 * prog.k / prog.n) + "%" : "0%";
-    const filterLabel = { all: "all", seeds: "seeds", near: "near QFFDB", unlabelled: "unlabelled", batch2: "batch 2", batch3: "batch 3" }[state.filter] || "all";
+    const filterLabel = { all: "all", seeds: "seeds", near: "near QFFDB", unlabelled: "unlabelled", batch2: "batch 2", batch3: "batch 3", batch4: "batch 4 (blind)" }[state.filter] || "all";
     document.getElementById("position").textContent = list.length
       ? ((state.index + 1) + " / " + list.length + " " + filterLabel)
       : ("0 " + filterLabel);
@@ -342,19 +364,22 @@
     const strike = cand.strike == null ? "—" : Math.round(Number(cand.strike)) + "°";
     const length = cand.length_m == null ? "—" : Math.round(Number(cand.length_m)) + " m";
     const labelled = entry && entry.label ? entry.label : "—";
-    document.getElementById("meta").innerHTML = [
-      ["id", cand.id],
-      ["tile", cand.short || cand.tile],
-      ["label", labelled],
-      ["strike", strike],
-      ["length", length],
-      ["score", score],
-      ["QFFDB fault:", qName + ", " + qDist + " m"]
-    ].concat(cand.seed_status ? [["seed position:", escapeText(cand.seed_status)]] : []).map(function (pair) {
+    const metaRows = isBlind(cand)
+      ? [["id", cand.id], ["label", labelled]]
+      : [
+        ["id", cand.id],
+        ["tile", cand.short || cand.tile],
+        ["label", labelled],
+        ["strike", strike],
+        ["length", length],
+        ["score", score],
+        ["QFFDB fault:", qName + ", " + qDist + " m"]
+      ].concat(cand.seed_status ? [["seed position:", escapeText(cand.seed_status)]] : []);
+    document.getElementById("meta").innerHTML = metaRows.map(function (pair) {
       return "<div><b>" + pair[0] + "</b> " + pair[1] + "</div>";
     }).join("");
     document.getElementById("seed-badge").hidden = !(cand.kind === "seed" || cand.seed === true);
-    const flags = cand.mask_flags || {};
+    const flags = isBlind(cand) ? {} : (cand.mask_flags || {});
     document.getElementById("flags").innerHTML = Object.keys(flags).map(function (key) {
       const value = flags[key];
       const cls = value ? "flag on" : "flag";
@@ -366,7 +391,7 @@
     const nVert = entry && entry.trace ? entry.trace.length : 0;
     document.getElementById("vertex-count").textContent = nVert + (nVert === 1 ? " vertex" : " vertices");
     const warn = document.getElementById("trace-warn");
-    if (entry && entry.label === "scarp" && !hasScarpTrace(entry)) {
+    if (entry && entry.label === "scarp" && !hasScarpTrace(entry) && !isBlind(cand)) {
       warn.hidden = false;
       warn.textContent = "A scarp needs a trace of at least two points.";
     } else if (nVert === 1) {
@@ -452,6 +477,21 @@
   function rowFrom(item) {
     const cand = item.cand;
     const entry = item.entry;
+    if (isBlind(cand)) {
+      return {
+        candidate_id: cand.id,
+        tile: "",
+        label: exportLabel(entry),
+        reviewer: "",
+        note: "",
+        timestamp_utc: "",
+        centroid_e: "",
+        centroid_n: "",
+        strike: "",
+        length_m: "",
+        trace_utm32611: ""
+      };
+    }
     return {
       candidate_id: cand.id,
       tile: cand.tile || "",
@@ -501,12 +541,13 @@
       const row = rowFrom(item);
       const props = {};
       COLUMNS.forEach(function (col) { props[col] = row[col]; });
-      props.wrong_location = !!item.entry.wrong_location;
+      props.wrong_location = isBlind(item.cand) ? false : !!item.entry.wrong_location;
       features.push({
         type: "Feature",
-        geometry: { type: "Point", coordinates: [row.centroid_e, row.centroid_n] },
+        geometry: isBlind(item.cand) ? null : { type: "Point", coordinates: [row.centroid_e, row.centroid_n] },
         properties: props
       });
+      if (isBlind(item.cand)) return;
       const verts = (item.entry.trace || []).map(function (p) {
         return [round1(p[0]), round1(p[1])];
       });
@@ -567,7 +608,7 @@
       savedEl.textContent = "This trace is a scarp. Clear it before choosing another label.";
       return;
     }
-    if (label === "scarp" && !hasScarpTrace(entry)) {
+    if (label === "scarp" && !hasScarpTrace(entry) && !isBlind(cand)) {
       state.traceMode = true;
       const idx = filtered().findIndex(function (item) { return item.id === cand.id; });
       if (idx >= 0) state.index = idx;
@@ -784,6 +825,14 @@
     if (!cand) return;
     const xy = eventToChip(ev);
     if (!xy) return;
+    if (isBlind(cand)) {
+      document.getElementById("cursor-utm").textContent = "";
+      if (state.traceMode) {
+        state.cursorChip = xy;
+        drawOverlay();
+      }
+      return;
+    }
     const utm = chipToUtm(xy[0], xy[1], cand);
     document.getElementById("cursor-utm").textContent = "E " + utm[0].toFixed(1) + "   N " + utm[1].toFixed(1);
     if (state.traceMode) {
@@ -793,7 +842,7 @@
   });
   stage.addEventListener("pointerleave", function () {
     state.cursorChip = null;
-    document.getElementById("cursor-utm").textContent = "E —   N —";
+    document.getElementById("cursor-utm").textContent = isBlind(current()) ? "" : "E —   N —";
     if (state.traceMode) drawOverlay();
   });
   chip.addEventListener("load", function () {
@@ -881,8 +930,11 @@
     state.chipM = Number(payload.chip_m) || state.chipPx;
     state.byId = {};
     state.queue.forEach(function (cand) { state.byId[cand.id] = cand; });
-    state.filter = "batch3";
-    document.getElementById("filter").value = "batch3";
+    const batch4Left = state.queue.some(function (cand) {
+      return Number(cand.batch) === 4 && !isLabelled(cand);
+    });
+    state.filter = batch4Left ? "batch4" : "batch3";
+    document.getElementById("filter").value = state.filter;
     const firstOpen = filtered().findIndex(function (cand) { return !isLabelled(cand); });
     state.index = firstOpen >= 0 ? firstOpen : 0;
     show();

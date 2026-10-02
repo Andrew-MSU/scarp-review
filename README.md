@@ -19,10 +19,11 @@ so GitHub Pages serves the files as they are.
 3. One candidate at a time. The multidirectional hillshade is shown first.
    The small map is a 2 km context with this chip outlined.
 
-The page opens on Batch 3. Those 248 chips are off-road lineaments from the
+While any Batch 4 chip is still unlabelled, the page opens on Batch 4.
+Otherwise it opens on Batch 3. Batch 3 is 248 off-road lineaments from the
 Reno QL2 tile (x29y437) that were not in the first 277. Batch 2 (61 chips,
 Elko and Reno QL2) and the first 216 candidates stay in the queue. Filter
-with Batch 3, Batch 2, All, Seeds, Near QFFDB fault (≤ 500 m), or Unlabelled,
+with Batch 4, Batch 3, Batch 2, All, Seeds, Near QFFDB fault (≤ 500 m), or Unlabelled,
 or jump to the first candidate you have not labelled. Labels already stored
 in this browser stay attached to the original ids. The bar reads
 `labelled k / n` plus a count for each class.
@@ -36,6 +37,14 @@ the original seed estimate. Magenta is your trace of the true scarp. The
 white bar is 100 m and the arrow is north.
 
 If it is a scarp, trace it. Enter saves that line as scarp.
+
+Batch 4 is a blind pass. The page asks only whether the drawn line is a
+real fault scarp: 1 scarp, 2 road/rail, 3 drainage/channel, 4 other
+(terrace riser, bedrock, nothing), 5 unsure. Key 1 saves that answer
+without a trace. The chip shows the line and nothing else — no fault
+overlay, no map, no coordinates. A Batch 4 export row has the id and the
+label; the other columns are empty. Batches 1–3 are unchanged: key 1 still
+opens trace mode, and those exports still carry the tile and the trace.
 
 Chrome blocks `fetch` of `candidates.json` on `file://`. `candidates.js`
 sets `window.QUEUE` and the page uses that when fetch fails. Over http either

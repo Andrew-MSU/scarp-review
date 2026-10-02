@@ -78,6 +78,25 @@ main {
   color: var(--muted);
   margin: 6px 0 0;
 }
+.batch4-banner {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 15px;
+}
+body.blind .cursor-utm,
+body.blind #minimap,
+body.blind .context-head,
+body.blind .context-help,
+body.blind .legend-qffdb,
+body.blind #about,
+body.blind .trace-guidance,
+body.blind .help.stay,
+body.blind #guidance {
+  display: none;
+}
 .tools, .exports, .keys { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
 button, .file-btn {
   font: inherit;

@@ -26,6 +26,7 @@
   </label>
   <label class="filt">Filter
     <select id="filter">
+      <option value="batch4">Batch 4 (blind)</option>
       <option value="batch3" selected>Batch 3 (new)</option>
       <option value="batch2">Batch 2</option>
       <option value="all">All</option>
@@ -45,6 +46,7 @@
     </div>
     <p class="cursor-utm" id="cursor-utm">E —   N —</p>
     <p class="trace-guidance">If it is a scarp, trace it. Enter saves that line as scarp.</p>
+    <p id="batch4-banner" class="batch4-banner" hidden>Is the drawn line on a real fault scarp? 1 scarp (real fault scarp), 2 road/rail, 3 drainage/channel, 4 other (terrace riser, bedrock, nothing), 5 unsure.</p>
     <p id="trace-banner" class="trace-banner" hidden>TRACE MODE: tap along the scarp · u undo · c clear · Enter done</p>
     <div class="tools">
       <button type="button" id="trace-mode" class="trace-go">Trace (r)</button>
@@ -59,9 +61,9 @@
     <p class="help" id="guidance"></p>
   </section>
   <aside>
-    <h2>Context</h2>
+    <h2 class="context-head">Context</h2>
     <img id="minimap" class="map" alt="context map" width="200" height="200">
-    <p class="help">Red box is this 400 m chip. Yellow dot is the candidate.</p>
+    <p class="help context-help">Red box is this 400 m chip. Yellow dot is the candidate.</p>
     <h2>Candidate <span id="seed-badge" class="badge" hidden>seed</span></h2>
     <div class="meta" id="meta"></div>
     <h2>Mask flags</h2>
@@ -69,7 +71,7 @@
     <h2>Note</h2>
     <textarea id="note" placeholder="optional note, saved with the label"></textarea>
     <label class="check"><input type="checkbox" id="wrong-location"> Wrong location (w)</label>
-    <p class="legend"><span class="swatch qffdb"></span> orange lines: USGS Quaternary Fault and Fold Database</p>
+    <p class="legend legend-qffdb"><span class="swatch qffdb"></span> orange lines: USGS Quaternary Fault and Fold Database</p>
     <p class="legend"><span class="swatch trace"></span> yellow: detector trace / seed; dashed grey: original seed estimate</p>
     <p class="legend"><span class="swatch user-trace"></span> magenta: your trace of the true scarp · <span id="vertex-count">0 vertices</span></p>
     <div class="trace-actions">
