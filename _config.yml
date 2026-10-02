@@ -1,0 +1,4 @@
+# GitHub Pages: serve the site files only. archive/ (batches 1-3) stays in the repo but is not published.
+exclude:
+  - archive
+  - README.md

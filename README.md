@@ -1,170 +1,53 @@
 # Scarp review
 
-Static page for labelling candidate lineaments on hillshade chips. There is no
-server and no account. Open the published site or `index.html` in this folder:
+Static page for one task: judge whether the line drawn on a hillshade chip follows a real fault scarp. There is no server and no account. Open the published site or `index.html` in this folder:
 
 https://andrew-msu.github.io/scarp-review/
 
-Links are relative, so the page also works from disk. `.nojekyll` is included
-so GitHub Pages serves the files as they are.
+Links are relative, so the page also works from disk. `_config.yml` excludes `archive/` from the GitHub Pages build, so the archived batches are kept in the repo but not served.
+
+The page loads the 152 batch-4 chips only (`b4-001` through `b4-152`). Each chip is the multidirectional hillshade with the line already drawn. Batches 1–3 are in `archive/` and are not loaded or served.
+
+Chrome blocks `fetch` of `candidates.json` on `file://`. `candidates.js` sets `window.QUEUE`, and the page uses that when fetch fails. Over http, either file works; fetch is preferred.
 
 ## Use
 
-1. Open the page.
-2. Type your name in Reviewer (Andrew, Donggun, or Walker). The browser
-   remembers it. Labels are refused until the name is set. Walker's link,
-   with the name filled in, is
-   <https://andrew-msu.github.io/scarp-review/?reviewer=Walker>.
-   Each name keeps its own labels.
-3. One candidate at a time. The multidirectional hillshade is shown first.
-   The small map is a 2 km context with this chip outlined.
+1. Open the page and enter your name in Reviewer first. The browser remembers it. A label is refused until the name is set. A link can prefill a known name, for example <https://andrew-msu.github.io/scarp-review/?reviewer=Walker>. Each name keeps its own labels.
+2. The page opens on the first chip you have not labelled. The header shows where you are (`1 of 152`) and how many you have labelled (`Labelled k / 152`).
+3. Judge the drawn line. Keys 1–5 save that label for the current chip and move to the next one. `n` is next and `b` is back. Buttons do the same thing.
 
-While any Batch 4 chip is still unlabelled, the page opens on Batch 4.
-Otherwise it opens on Batch 3. Batch 3 is 248 off-road lineaments from the
-Reno QL2 tile (x29y437) that were not in the first 277. Batch 2 (61 chips,
-Elko and Reno QL2) and the first 216 candidates stay in the queue. Filter
-with Batch 4, Batch 3, Batch 2, All, Seeds, Near QFFDB fault (≤ 500 m), or Unlabelled,
-or jump to the first candidate you have not labelled. Labels already stored
-in this browser stay attached to the original ids. The bar reads
-`labelled k / n` plus a count for each class.
+| Key | What you see | Value stored |
+|---|---|---|
+| 1 | scarp | `scarp` |
+| 2 | road/rail | `road/rail/man-made` |
+| 3 | drainage/channel | `drainage` |
+| 4 | other | `other` |
+| 5 | unsure | `unsure` |
 
-Seeds (`seed-elko-1` … `seed-elko-4`) wear a seed badge. They are four
-example lines in the Elko area. They start unlabelled in this browser.
+Key 1 saves `scarp` directly. The optional note is saved with the label. Keys are ignored while the cursor is in the name or note field. Labelling the same chip again replaces your previous label for that chip. The button for the current label is highlighted.
 
-Orange lines on the chip are the USGS Quaternary Fault and Fold Database.
-Yellow is the detector trace or seed. A dashed grey line, when present, is
-the original seed estimate. Magenta is your trace of the true scarp. The
-white bar is 100 m and the arrow is north.
-
-If it is a scarp, trace it. Enter saves that line as scarp.
-
-Batch 4 is a blind pass. The page asks only whether the drawn line is a
-real fault scarp: 1 scarp, 2 road/rail, 3 drainage/channel, 4 other
-(terrace riser, bedrock, nothing), 5 unsure. Key 1 saves that answer
-without a trace. The chip shows the line and nothing else — no fault
-overlay, no map, no coordinates. A Batch 4 export row has the id and the
-label; the other columns are empty. Batches 1–3 are unchanged: key 1 still
-opens trace mode, and those exports still carry the tile and the trace.
-
-Chrome blocks `fetch` of `candidates.json` on `file://`. `candidates.js`
-sets `window.QUEUE` and the page uses that when fetch fails. Over http either
-file works; fetch is preferred.
-
-## Keys
-
-| Key | Action |
-|---|---|
-| 1 | scarp — straight sharp step, often parallel to a mapped fault and offset about 100–200 m; not a channel or a graded road. Opens trace mode. The scarp is saved only after a trace of at least two points |
-| 2 | road/rail/man-made — cut, berm, or embankment following a road, railroad, canal, or other built alignment |
-| 3 | drainage — sinuous channel, gully, or valley edge that winds with the slope |
-| 4 | other — a real linear feature that is none of the above (joint, terrace, fan boundary, artefact) |
-| 5 | unsure — too faint or short, or honestly more than one class |
-| r | enter trace mode |
-| u | undo the last trace vertex |
-| c | clear the trace on this candidate |
-| Enter | in trace mode, save a two-point trace as scarp and advance. One point stays here. No points advances without a label |
-| n | next candidate; in trace mode, same as Enter |
-| b | back |
-| t | toggle the yellow candidate trace |
-| h | switch multidirectional hillshade / sun perpendicular to strike |
-| w | toggle "wrong location" (a flag, separate from the trace) |
-
-Keys 2–5 save a label and move to the next candidate. Key 1 opens trace mode
-until the line has two points. Enter then saves it as scarp. A trace cannot
-be labelled as anything else until it is cleared. Labelling the same candidate
-again replaces your previous row (one row per reviewer and candidate). Keys
-are ignored while the cursor is in the name or note field.
-
-## Trace
-
-**Trace** (r) enters trace mode. Each tap on the chip adds a vertex along the
-true scarp. The line under the chip is the cursor's easting and northing.
-**Undo point** (u) removes the last vertex. **Clear trace** (c) removes them
-all. **Done**, Enter, or n with two or more points saves the label scarp and moves
-to the next candidate. One point stays on this chip. On a phone,
-a tap is a pointer-up that moved less than 8 px, and the chip ignores page
-scroll only while trace mode is on.
-
-The trace is drawn in magenta (`#ff3fd8`), 2.5 px, with a dot on each vertex.
-Vertices are stored as UTM zone 11N (EPSG:32611), not as pixels. A trace of
-two or more points is a scarp. Clearing the trace clears that scarp label.
-
-**Wrong location** (w) is independent. It does not start a trace and it does
-not move the yellow line. Use it when the candidate is simply in the wrong
-place and you are not drawing a replacement.
+Labels save in this browser automatically. When finished, click **Export CSV** and send the file to Andrew.
 
 ## Export
 
-**Export CSV** writes `scarp_labels.csv`. Columns, in order:
+**Export CSV** downloads `scarp_review_labels.csv`. Columns, in order:
 
-`candidate_id,tile,label,reviewer,note,timestamp_utc,centroid_e,centroid_n,strike,length_m,trace_utm32611`
+`candidate_id,label,reviewer,note,timestamp_utc`
 
-`timestamp_utc` is UTC ISO-8601 with seconds and a `Z` suffix
-(`2026-09-29T18:00:00Z`). The label strings are exactly `scarp`,
-`road/rail/man-made`, `drainage`, `other`, `unsure`.
+Rows are labels whose id is one of the 152 loaded chips, for any reviewer, sorted by `candidate_id`. The note text is included. The page reports `Exported N rows`.
 
-`trace_utm32611` is WKT in EPSG:32611. Two or more vertices are
-`LINESTRING (E N, E N, ...)` with each coordinate to 1 decimal. One vertex is
-`POINT (E N)`. The cell is empty when you did not trace. A row is exported
-when it has a label or a trace. A trace of two or more points is exported as
-`scarp`. A row with no trace and no label is not exported. `unsure` is only
-the class chosen with key 5.
+`timestamp_utc` is UTC ISO-8601 with seconds and a `Z` suffix (`2026-09-29T18:00:00Z`). The label strings are exactly `scarp`, `road/rail/man-made`, `drainage`, `other`, and `unsure`.
 
-`[wrong_location]` is still appended to the free text of `note` when that
-flag is set. New exports do not put the trace in the note. Older files may
-still contain `[redraw_utm32611 E1 N1; E2 N2; ...]`. The merge script reads
-that token as a trace when `trace_utm32611` is empty.
+## Storage
 
-Example note: `offset looks high [wrong_location]`
+Labels stay in `localStorage` under the key `scarp_review_site_v1`. That key is unchanged, so labels already in this browser stay there, including labels from batches 1–3. This page does not delete entries for ids it does not load. It only shows and exports the batch-4 chips.
 
-**Export GeoJSON** writes `scarp_labels.geojson`: a point at each exported
-centroid (EPSG:32611) with those columns as properties, plus `wrong_location`,
-and one LineString (2+ vertices) or Point (1 vertex) per trace. Trace features
-have `candidate_id`, `reviewer`, `label`, `timestamp_utc`, and `kind` set to
-`trace`. They are not extra rows.
-
-**Export JSON backup** / **Import JSON backup** copies the browser state
-(reviewer, notes, labels, traces, the stay-to-trace choice) so you can move
-machines without labelling twice.
+Do not commit label exports to this public repository.
 
 ## Data
 
-Chips are hillshades of USGS 3DEP 1 m lidar (public domain). Fault lines are from the U.S. Geological Survey Quaternary fault and fold database for the United States (public domain), accessed 2026-09-29, https://www.usgs.gov/natural-hazards/earthquake-hazards/faults. 3DEP: https://www.usgs.gov/3d-elevation-program. Candidate lineaments are from our own detector.
+Chips are hillshades of USGS 3DEP 1 m lidar (public domain).
 
 ## License
 
-Hillshade chips and the QFFDB lines are works of the United States Government
-and are in the public domain. The HTML, CSS, and JavaScript in this repository
-are MIT licensed. Copyright 2026 Andrew Laskowski. See `LICENSE`.
-
-## Privacy
-
-Labels stay in your browser (localStorage) until you export them. Send exported CSV/GeoJSON files to the team privately; they are merged into our private project repository with scripts/review_import_labels.py. Never commit label exports to this public repository or open issues/PRs containing them.
-
-## Georeference
-
-Each chip is 400 × 400 px at 1 m/px (400 m on a side), north-up, centred on
-the candidate centroid. `chip_px` and `chip_m` in `candidates.json` are both
-400.
-
-Pixel `(x, y)` has its origin at the top-left of the chip (x east, y south).
-The page reads the chip's on-screen rectangle (`getBoundingClientRect`) so a
-scaled chip, including a phone layout, still maps the tap onto these pixels.
-In EPSG:32611:
-
-```
-E = centroid_e + (x - 200) * (chip_m / chip_px)
-N = centroid_n - (y - 200) * (chip_m / chip_px)
-```
-
-200 is half of 400, the chip centre. With `chip_m == chip_px` the scale is
-1 m per pixel.
-
-The hillshade itself was sampled in the lidar tile CRS, NAD83 / UTM zone 11N
-(EPSG:26911 on these tiles). Centroids and trace vertices are stored in
-WGS84 / UTM zone 11N (EPSG:32611). Those two frames differ by about 1–2 m in
-this part of Nevada, so a stored vertex can sit a metre or two off the pixel
-you tapped when it is plotted back on the NAD83 hillshade. The yellow trace
-is in chip metres from the top-left of that hillshade (`trace_poly` for
-seeds, `trace_segments` as `[x1, y1, x2, y2]` for detector candidates) and
-lines up with the image. The magenta trace uses the EPSG:32611 formula above.
+Hillshade chips are works of the United States Government and are in the public domain. The HTML, CSS, and JavaScript in this repository are MIT licensed. Copyright 2026 Andrew Laskowski. See `LICENSE`.

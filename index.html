@@ -10,96 +10,51 @@
 </head>
 <body>
 <header>
-  <h1>Scarp review</h1>
-  <div class="progress-wrap">
-    <div class="bar" aria-hidden="true"><span id="progress-bar"></span></div>
-    <span id="progress">loading…</span>
-    <span id="position"></span>
+  <div class="header-inner">
+    <div class="brand">
+      <h1>Scarp review</h1>
+      <div class="progress-wrap">
+        <div class="bar" aria-hidden="true"><span id="progress-bar"></span></div>
+        <span id="position"></span>
+        <span id="progress">loading…</span>
+      </div>
+    </div>
+    <label class="rev">Reviewer
+      <input name="reviewer" id="reviewer" list="reviewers" placeholder="your name" autocomplete="off">
+      <datalist id="reviewers">
+        <option value="Andrew"></option>
+        <option value="Donggun"></option>
+        <option value="Walker"></option>
+      </datalist>
+    </label>
+    <button type="button" id="export-csv">Export CSV</button>
+    <span id="saved" class="status" role="status"></span>
   </div>
-  <label class="rev">Reviewer
-    <input name="reviewer" id="reviewer" list="reviewers" placeholder="Andrew, Donggun, or Walker" autocomplete="off">
-    <datalist id="reviewers">
-      <option value="Andrew"></option>
-      <option value="Donggun"></option>
-      <option value="Walker"></option>
-    </datalist>
-  </label>
-  <label class="filt">Filter
-    <select id="filter">
-      <option value="batch4">Batch 4 (blind)</option>
-      <option value="batch3" selected>Batch 3 (new)</option>
-      <option value="batch2">Batch 2</option>
-      <option value="all">All</option>
-      <option value="seeds">Seeds</option>
-      <option value="near">Near QFFDB fault (≤ 500 m)</option>
-      <option value="unlabelled">Unlabelled</option>
-    </select>
-  </label>
-  <button type="button" id="jump-unlabelled">First unlabelled</button>
-  <span id="saved" class="status"></span>
 </header>
-<main>
-  <section>
+<div class="page">
+  <section id="instructions">
+    <p>Enter your name first. Judge whether the drawn line follows a real fault scarp.</p>
+    <p>Keys: <kbd>1</kbd> scarp, <kbd>2</kbd> road/rail, <kbd>3</kbd> drainage/channel, <kbd>4</kbd> other, <kbd>5</kbd> unsure; <span class="nobreak"><kbd>n</kbd> / <kbd>b</kbd> next / back.</span></p>
+    <p>Labels save in this browser automatically. When finished, click Export CSV and send the file to Andrew.</p>
+  </section>
+  <main>
     <div class="stage" id="stage">
       <img id="chip" alt="hillshade chip" width="400" height="400" draggable="false">
       <canvas id="overlay" width="400" height="400"></canvas>
     </div>
-    <p class="cursor-utm" id="cursor-utm">E —   N —</p>
-    <p class="trace-guidance">If it is a scarp, trace it. Enter saves that line as scarp.</p>
-    <p id="batch4-banner" class="batch4-banner" hidden>Is the drawn line on a real fault scarp? 1 scarp (real fault scarp), 2 road/rail, 3 drainage/channel, 4 other (terrace riser, bedrock, nothing), 5 unsure.</p>
-    <p id="trace-banner" class="trace-banner" hidden>TRACE MODE: tap along the scarp · u undo · c clear · Enter done</p>
-    <div class="tools">
-      <button type="button" id="trace-mode" class="trace-go">Trace (r)</button>
-      <button type="button" id="mode-multi" class="on">Multidirectional</button>
-      <button type="button" id="mode-dir">Across-strike sun (h)</button>
-      <button type="button" id="toggle-trace" class="on">Yellow line (t)</button>
-      <button type="button" id="prev">Back (b)</button>
-      <button type="button" id="next">Next (n)</button>
+    <div class="nav">
+      <button type="button" id="prev">Back</button>
+      <button type="button" id="next">Next</button>
     </div>
-    <p class="help stay">A scarp is a trace. Press 1 or Trace, tap at least two points, then Enter. That saves the label scarp.</p>
     <div class="keys" id="keys"></div>
-    <p class="help" id="guidance"></p>
-  </section>
-  <aside>
-    <h2 class="context-head">Context</h2>
-    <img id="minimap" class="map" alt="context map" width="200" height="200">
-    <p class="help context-help">Red box is this 400 m chip. Yellow dot is the candidate.</p>
-    <h2>Candidate <span id="seed-badge" class="badge" hidden>seed</span></h2>
-    <div class="meta" id="meta"></div>
-    <h2>Mask flags</h2>
-    <div class="flags" id="flags"></div>
-    <h2>Note</h2>
-    <textarea id="note" placeholder="optional note, saved with the label"></textarea>
-    <label class="check"><input type="checkbox" id="wrong-location"> Wrong location (w)</label>
-    <p class="legend legend-qffdb"><span class="swatch qffdb"></span> orange lines: USGS Quaternary Fault and Fold Database</p>
-    <p class="legend"><span class="swatch trace"></span> yellow: detector trace / seed; dashed grey: original seed estimate</p>
-    <p class="legend"><span class="swatch user-trace"></span> magenta: your trace of the true scarp · <span id="vertex-count">0 vertices</span></p>
-    <div class="trace-actions">
-      <button type="button" id="undo-point">Undo point (u)</button>
-      <button type="button" id="clear-trace">Clear trace (c)</button>
-      <button type="button" id="trace-done">Done</button>
-    </div>
-    <p id="trace-warn" class="trace-warn" hidden>Enter saves this trace as a scarp.</p>
-    <div class="exports">
-      <button type="button" id="export-csv" class="primary">Export CSV</button>
-      <button type="button" id="export-geojson">Export GeoJSON</button>
-      <button type="button" id="export-json">Export JSON backup</button>
-      <label class="file-btn">Import JSON backup
-        <input type="file" id="import-json" accept="application/json,.json">
-      </label>
-    </div>
-  </aside>
-</main>
-<footer id="about">
-  <h2>About</h2>
-  <p>Orange lines are the USGS Quaternary Fault and Fold Database. Yellow is the detector trace or seed. A dashed grey line, when present, is the original seed estimate. Magenta is your trace. A scarp requires that trace. White bar is 100 m; arrow is north.</p>
-  <p>Trace (r) or key 1 starts trace mode: tap along the scarp, u undoes a point, c clears. Enter, Done, or n with two or more points saves the label scarp and advances. One point stays on this chip. Keys 2–5 save another class and advance, and they do not apply while a trace is on the chip. b goes back; h swaps the hillshade. w toggles wrong location, which is a separate flag from the trace.</p>
-  <p>Trace vertices are stored as UTM zone 11N, EPSG:32611, in the trace_utm32611 column (WKT). The chip image is centred in the tile CRS (NAD83 / UTM zone 11N), which sits about 1–2 m away from that frame.</p>
-  <h2>Data</h2>
-  <p>Chips are hillshades of USGS 3DEP 1 m lidar (public domain). Fault lines are from the U.S. Geological Survey Quaternary fault and fold database for the United States (public domain), accessed 2026-09-29, <a href="https://www.usgs.gov/natural-hazards/earthquake-hazards/faults">https://www.usgs.gov/natural-hazards/earthquake-hazards/faults</a>. 3DEP: <a href="https://www.usgs.gov/3d-elevation-program">https://www.usgs.gov/3d-elevation-program</a>. Candidate lineaments are from our own detector.</p>
-  <h2>Labels</h2>
-  <p>Labels stay in your browser (localStorage) until you export them. Send exported CSV/GeoJSON files to the team privately; they are merged into our private project repository with scripts/review_import_labels.py. Never commit label exports to this public repository or open issues/PRs containing them.</p>
-</footer>
+    <label class="note-label">Note
+      <textarea id="note" placeholder="optional note, saved with the label"></textarea>
+    </label>
+  </main>
+  <footer>
+    <p>USGS 3DEP 1 m lidar hillshade, public domain.</p>
+  </footer>
+</div>
 <script src="candidates.js"></script>
 <script src="app.js"></script>
 </body>
