@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FaultDraw</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="banner" role="status">
+  <span id="dirty-dot" class="dirty-dot" hidden title="Changes since last export"></span>
+  <p>Your traces are saved only in this browser (localStorage). Export GeoJSON regularly.</p>
+  <button type="button" id="dismiss-banner">Dismiss</button>
+</div>
+<div id="shell">
+  <div id="map" role="application" aria-label="FaultDraw map"></div>
+</div>
+
+<aside id="panel">
+  <header class="panel-head">
+    <h1>FaultDraw</h1>
+    <button type="button" id="panel-toggle" aria-expanded="true" aria-controls="panel-body">Hide</button>
+  </header>
+  <div id="panel-body">
+    <section>
+      <h2>Data</h2>
+      <div class="row">
+        <button type="button" id="btn-load" data-testid="load-data">Load data...</button>
+        <button type="button" id="btn-forget" data-testid="forget-data">Forget loaded data</button>
+      </div>
+      <p id="status-line" role="status"></p>
+      <p id="bundle-note" class="meta" hidden></p>
+      <ul id="status-errors" class="errors" hidden></ul>
+      <ul id="layer-list" class="layers"></ul>
+      <p class="hint">Files stay in this browser. Nothing is uploaded.</p>
+    </section>
+
+    <section>
+      <h2>Favorability</h2>
+      <label class="slider">Opacity
+        <input id="opacity-fav" data-testid="opacity-fav" type="range" min="0" max="100" step="1" value="55" disabled>
+        <span id="opacity-fav-label">55%</span>
+      </label>
+      <div id="fav-legend" class="legend" hidden>
+        <div class="plasma-bar" role="img" aria-label="Plasma scale from low to high"></div>
+        <div class="legend-labels"><span>low</span><span>high</span></div>
+        <p id="fav-meta" class="meta"></p>
+      </div>
+      <label class="slider">U6 dots opacity
+        <input id="opacity-dots" type="range" min="0" max="100" step="1" value="100" disabled>
+        <span id="opacity-dots-label">100%</span>
+      </label>
+      <p id="dots-meta" class="meta"></p>
+    </section>
+
+    <section>
+      <h2>Earthquakes</h2>
+      <label class="slider">Min magnitude
+        <input id="minmag" data-testid="minmag" type="range" min="-1" max="7" step="0.1" value="1.5">
+        <input id="minmag-num" type="number" min="-1" max="7" step="0.1" value="1.5" aria-label="Minimum magnitude">
+      </label>
+      <p id="quake-count">0 of 0 shown</p>
+      <p id="busy" class="meta" hidden></p>
+      <div id="quake-legend" class="legend" hidden>
+        <div class="depth-bar" role="img" aria-label="Depth from 0 kilometres yellow to 30 kilometres purple"></div>
+        <div class="legend-labels"><span>0 km</span><span>30 km</span></div>
+        <div id="mag-legend" class="mag-legend"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Traces</h2>
+      <label class="check"><input type="checkbox" id="snap-traces"> Snap to my traces</label>
+      <div class="row">
+        <button type="button" id="btn-undo" data-testid="undo">Undo</button>
+        <button type="button" id="btn-redo">Redo</button>
+      </div>
+      <div class="row">
+        <button type="button" id="btn-import" data-testid="import-traces">Import traces</button>
+        <button type="button" id="btn-export" data-testid="export-traces">Export GeoJSON</button>
+      </div>
+      <button type="button" id="btn-clear" class="danger" data-testid="clear-traces">Clear all traces</button>
+      <p id="trace-stats" data-testid="trace-stats">Segments: 0 | Total length: 0.00 km</p>
+      <p id="export-line"><span id="dirty-flag" class="dirty-dot" hidden title="Changes since last export"></span> <span id="export-label">Last export: never</span></p>
+      <p class="hint">Draw with the polyline tool. Click the last vertex, press Enter, or use Finish. Backspace removes the last vertex. Esc cancels. Ctrl+Z undoes a finished edit.</p>
+    </section>
+  </div>
+</aside>
+
+<div id="drop-overlay" hidden>
+  <div>Drop files to load data</div>
+</div>
+<div id="loading" hidden>
+  <div id="loading-text">Loading…</div>
+</div>
+
+<input id="file-load" type="file" multiple hidden accept=".png,.json,.geojson,.csv,image/png,application/json,application/geo+json,text/csv">
+<input id="file-import" type="file" hidden accept=".json,.geojson,application/json,application/geo+json">
+
+<dialog id="import-dialog">
+  <form method="dialog">
+    <p><strong>Import drawn traces?</strong></p>
+    <p class="hint">Replace removes the traces in this browser first. Merge keeps them and skips features whose id already exists. This does not load known faults or other data — use Load data for that.</p>
+    <div class="row">
+      <button type="submit" value="replace">Replace</button>
+      <button type="submit" value="merge">Merge</button>
+      <button type="submit" value="cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

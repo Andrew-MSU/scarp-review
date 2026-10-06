@@ -1,0 +1,327 @@
+/* FaultDraw — full-window map with a compact panel. */
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  color: #1c1f24;
+  font: 13px/1.4 "Segoe UI", Helvetica, Arial, sans-serif;
+  background: #121418;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+button, input, select, textarea {
+  font: inherit;
+}
+
+button {
+  background: #243044;
+  color: #f4f7fb;
+  border: 1px solid #3d516e;
+  border-radius: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #2e3e56;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button.danger {
+  background: #6e2b2b;
+  border-color: #8d3d3d;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #00e5ff;
+  outline-offset: 1px;
+}
+
+#banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  background: #fff4cc;
+  color: #3d2e00;
+  border-bottom: 1px solid #e2c56a;
+}
+
+#banner p {
+  margin: 0;
+  flex: 1;
+}
+
+#banner button {
+  background: #fff;
+  color: #3d2e00;
+  border-color: #c4a24a;
+}
+
+#shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
+
+#map {
+  height: 100%;
+  background: #1a1d22;
+}
+
+#panel {
+  position: fixed;
+  right: 8px;
+  z-index: 1200;
+  width: min(340px, calc(100vw - 16px));
+  display: flex;
+  flex-direction: column;
+  background: rgba(16, 18, 22, 0.94);
+  color: #e8eaed;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+#panel-body {
+  overflow: auto;
+  padding: 0 12px 12px;
+}
+
+#panel.collapsed #panel-body {
+  display: none;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.panel-head h1 {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+}
+
+#panel h2 {
+  margin: 12px 0 6px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9ec9d6;
+}
+
+#panel section + section {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.slider, .check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.slider input[type="range"] {
+  flex: 1;
+  min-width: 80px;
+}
+
+.slider input[type="number"] {
+  width: 4.5em;
+}
+
+#panel p {
+  margin: 4px 0;
+}
+
+.hint, .meta {
+  color: #b7c0cc;
+  font-size: 12px;
+}
+
+.errors {
+  margin: 6px 0;
+  padding-left: 18px;
+  color: #ffb4b4;
+}
+
+.layers {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+
+.legend {
+  margin: 6px 0 8px;
+}
+
+.plasma-bar {
+  height: 12px;
+  border-radius: 3px;
+  background: linear-gradient(to right, #0d0887, #6a00a8, #b12a90, #e16462, #fca636, #f0f921);
+}
+
+.depth-bar {
+  height: 12px;
+  border-radius: 3px;
+  /* 0 km yellow -> 30 km dark purple, same stops as depthColor() */
+  background: linear-gradient(to right, rgb(253, 231, 37), rgb(94, 201, 98), rgb(33, 145, 140), rgb(59, 82, 139), rgb(68, 1, 84));
+}
+
+.legend-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #c5ced8;
+}
+
+.mag-legend {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  min-height: 32px;
+  margin-top: 6px;
+}
+
+.mag-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: #d5dde6;
+}
+
+.mag-dot {
+  display: block;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: #3b528b;
+  border: 1px solid #111;
+}
+
+.dirty-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ff4d4d;
+  box-shadow: 0 0 0 2px rgba(255, 77, 77, 0.25);
+  flex: 0 0 auto;
+}
+
+img.pixelated-overlay {
+  image-rendering: pixelated;
+}
+
+.leaflet-drawings-pane path.trace-line {
+  filter: drop-shadow(0 0 1px #02181b);
+}
+
+.leaflet-control.readout {
+  background: rgba(16, 18, 22, 0.88);
+  color: #f2f4f7;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font: 12px/1.35 ui-monospace, Consolas, monospace;
+  max-width: min(640px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+#drop-overlay, #loading {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 10, 14, 0.55);
+  color: #fff;
+  font-size: 20px;
+  pointer-events: none;
+}
+
+#drop-overlay div, #loading div {
+  padding: 16px 22px;
+  border: 2px dashed #00e5ff;
+  border-radius: 12px;
+  background: rgba(10, 16, 22, 0.9);
+}
+
+#loading {
+  pointer-events: auto;
+  z-index: 4500;
+}
+
+dialog {
+  border: none;
+  border-radius: 10px;
+  padding: 16px;
+  max-width: 420px;
+  color: #1c1f24;
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.trace-form, .qpop {
+  font: 13px/1.35 "Segoe UI", Helvetica, Arial, sans-serif;
+  color: #1a1d22;
+}
+
+.trace-form label {
+  display: block;
+  margin: 6px 0;
+}
+
+.trace-form select, .trace-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 2px;
+}
+
+.trace-form .id {
+  font-size: 11px;
+  color: #555;
+  word-break: break-all;
+}
+
+.qpop .muted {
+  color: #444;
+}
+
+@media (max-width: 720px) {
+  #panel {
+    width: calc(100vw - 12px);
+    right: 6px;
+  }
+}

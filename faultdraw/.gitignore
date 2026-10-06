@@ -1,0 +1,11 @@
+# Data dropped into this folder must never be committed.
+# App code (html, js, css, md) is not matched by these patterns.
+*.png
+*.jpg
+*.tif
+*.geojson
+*.json
+*.csv
+*.gz
+*.zip
+*.npy
