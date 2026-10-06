@@ -24,6 +24,8 @@ Hillshade and imagery tiles are requested from those public services. Your trace
 
 Loading a layer replaces the previous layer of that kind. The last load is stored in IndexedDB (`faultdraw` / `inputs`) and restored on the next visit. **Forget loaded data** clears that store and the overlays. It does not delete drawn traces.
 
+`faultdraw/.gitignore` ignores rasters, GeoJSON, JSON, CSV, and archives dropped in this folder so a data file is not committed by accident. The page, scripts, and this readme are not ignored.
+
 | Layer | When loaded | Draw order (bottom to top) |
 | --- | --- | --- |
 | Favorability PNG | On, opacity 55% | above the basemap |

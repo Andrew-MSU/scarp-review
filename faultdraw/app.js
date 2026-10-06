@@ -464,8 +464,8 @@ function renderReadout(latlng) {
 }
 
 map.on('mousemove', (e) => renderReadout(e.latlng));
-map.on('zoomend', () => renderReadout(lastLatLng || L.latLng(STUDY_CENTER[0], STUDY_CENTER[1])));
-renderReadout(L.latLng(STUDY_CENTER[0], STUDY_CENTER[1]));
+map.on('zoomend', () => renderReadout(lastLatLng));
+renderReadout(null);
 
 // --- status ---
 
@@ -498,8 +498,9 @@ function renderStatus() {
       li.textContent = `${label}: not loaded`;
     } else if (label === 'Known faults') {
       const n = data.geojson.features.length;
+      const name = data.meta && data.meta.name ? ` — ${data.meta.name}` : '';
       const on = layer && map.hasLayer(layer) ? 'on' : 'off';
-      li.textContent = `${label}: ${n} feature${n === 1 ? '' : 's'} (${on})`;
+      li.textContent = `${label}: ${n} feature${n === 1 ? '' : 's'}${name} (${on})`;
     } else if (label === 'Earthquakes') {
       const n = data.lon.length;
       const name = data.meta && data.meta.name ? ` — ${data.meta.name}` : '';
@@ -543,6 +544,7 @@ function status() {
     totalLengthKm: stats.km,
     dirty: isDirty(),
     lastExport: storageGet(LAST_EXPORT_KEY),
+    restored: restoredAt != null,
   };
 }
 
@@ -712,8 +714,9 @@ function updateExportLabel() {
 }
 
 function updateUndoButtons() {
-  undoBtn.disabled = historyIndex <= 0;
-  redoBtn.disabled = historyIndex < 0 || historyIndex >= history.length - 1;
+  const drawing = !!(map.pm && map.pm.globalDrawModeEnabled && map.pm.globalDrawModeEnabled());
+  undoBtn.disabled = drawing || historyIndex <= 0;
+  redoBtn.disabled = drawing || historyIndex < 0 || historyIndex >= history.length - 1;
 }
 
 function commitNow() {
@@ -944,6 +947,11 @@ function importTraces(data, mode) {
     throw new Error('This file looks like hypocenters. Use Load data.');
   }
   if (!split.faults) throw new Error('No LineString traces in this file.');
+  const planned = [];
+  for (const feature of split.faults.features) {
+    for (const part of planTraceParts(feature)) planned.push(part);
+  }
+  if (!planned.length) throw new Error('No LineString traces with at least two positions.');
   let added = 0;
   let skipped = 0;
   suspend = true;
@@ -955,23 +963,22 @@ function importTraces(data, mode) {
     tracesGroup.eachLayer((layer) => {
       if (layer.feature && layer.feature.properties) existing.add(layer.feature.properties.id);
     });
-    for (const feature of split.faults.features) {
-      for (const part of planTraceParts(feature)) {
-        if (mode === 'merge' && existing.has(part.props.id)) {
-          skipped += 1;
-          continue;
-        }
-        addTrace(part.latlngs, part.props);
-        existing.add(part.props.id);
-        added += 1;
+    for (const part of planned) {
+      if (mode === 'merge' && existing.has(part.props.id)) {
+        skipped += 1;
+        continue;
       }
+      addTrace(part.latlngs, part.props);
+      existing.add(part.props.id);
+      added += 1;
     }
   } finally {
     suspend = false;
   }
   commitNow();
-  const extra = skipped ? ` Skipped ${skipped} with an id you already have.` : '';
-  setStatusText(`Imported ${added} traces.${extra}`);
+  const skippedIds = skipped ? ` Skipped ${skipped} with an id you already have.` : '';
+  const ignoredPts = split.quakes ? ' Point features were left out — use Load data for hypocenters.' : '';
+  setStatusText(`Imported ${added} traces.${skippedIds}${ignoredPts}`);
 }
 
 function askImportMode() {
@@ -1220,7 +1227,7 @@ function showFaults(fc, meta, persist) {
     },
   });
   unmount('faults');
-  mountNew('faults', layer, 'Known faults', true);
+  mountNew('faults', layer, overlayTitle('Known faults', meta && meta.name), true);
   const savedAt = nowIso();
   dataState.faults = { geojson: fc, meta: meta || {}, savedAt };
   if (persist) {
@@ -1362,9 +1369,14 @@ async function rebuildQuakes() {
     marker._q = { mag, depth_km: src.depth_km[i], time: src.time[i] || '' };
     group.addLayer(marker);
     added += 1;
-    if (added % 4000 === 0) {
-      setBusy(`Drawing earthquakes ${added.toLocaleString()}…`);
-      await frame();
+    if (added === 1 || added % 4000 === 0) {
+      // The canvas covers the map as soon as the first marker exists.
+      // Turn hits off immediately if a draw/edit tool is active.
+      syncQuakePointer();
+      if (added % 4000 === 0) {
+        setBusy(`Drawing earthquakes ${added.toLocaleString()}…`);
+        await frame();
+      }
     }
   }
   if (token !== quakeToken) return;

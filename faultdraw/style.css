@@ -321,7 +321,7 @@ dialog::backdrop {
 
 @media (max-width: 720px) {
   #panel {
-    width: calc(100vw - 12px);
+    width: min(340px, calc(100vw - 70px));
     right: 6px;
   }
 }
