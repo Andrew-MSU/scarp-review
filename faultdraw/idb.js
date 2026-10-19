@@ -68,3 +68,10 @@ export async function idbClear() {
   tx.objectStore(STORE).clear();
   await txDone(tx);
 }
+
+export async function idbDelete(kind) {
+  const database = await db();
+  const tx = database.transaction(STORE, 'readwrite');
+  tx.objectStore(STORE).delete(kind);
+  await txDone(tx);
+}
