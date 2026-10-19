@@ -3,7 +3,7 @@
 // This file never fetches or posts user files.
 
 import { wgs84ToUtm11N } from './utm.js';
-import { idbPut, idbGetAll, idbClear } from './idb.js';
+import { idbPut, idbGetAll, idbClear, idbDelete } from './idb.js';
 import {
   sidecarCandidates,
   parseBounds,
@@ -13,6 +13,8 @@ import {
   parseCsv,
   splitFeatureCollection,
   lineCollection,
+  normalizeOverlay,
+  featureStyle,
 } from './parse.js';
 
 const L = window.L;
@@ -63,6 +65,8 @@ const exportLabel = $('export-label');
 const dropOverlay = $('drop-overlay');
 const loadingEl = $('loading');
 const loadingText = $('loading-text');
+const overlaySection = $('overlay-section');
+const overlayListEl = $('overlay-list');
 
 let statusText = '';
 let errors = [];
@@ -87,6 +91,10 @@ const dataState = {
   faults: null,
   hypocenters: null,
 };
+
+// Hypothesis overlays from bundle layers.overlays, keyed by overlay id.
+// Each entry: { spec, layer, url, blob, geojson, savedAt, opacity }.
+const overlays = new Map();
 
 const layers = {
   favorability: null,
@@ -120,6 +128,9 @@ function makePane(name, zIndex) {
 
 makePane('fav', 350);
 makePane('dots', 360);
+// Hypothesis overlays: rasters above favorability and dots, lines just below known faults.
+makePane('ovraster', 365).style.pointerEvents = 'none';
+makePane('ovlines', 415).style.pointerEvents = 'none';
 makePane('faults', 420);
 makePane('quakes', 430);
 makePane('drawings', 450);
@@ -127,6 +138,7 @@ makePane('drawings', 450);
 const drawRenderer = L.svg({ pane: 'drawings' });
 const faultRenderer = L.svg({ pane: 'faults' });
 const quakeRenderer = L.canvas({ pane: 'quakes', tolerance: 3 });
+const overlayLineRenderer = L.canvas({ pane: 'ovlines' });
 
 const tracesGroup = L.featureGroup([], { pmIgnore: true, snapIgnore: true });
 layers.traces = tracesGroup;
@@ -513,6 +525,14 @@ function renderStatus() {
     }
     layerList.append(li);
   }
+  if (overlays.size) {
+    const li = document.createElement('li');
+    let on = 0;
+    for (const entry of overlays.values()) if (entry.layer && map.hasLayer(entry.layer)) on += 1;
+    li.textContent = `Hypothesis layers: ${overlays.size} loaded (${on} on)`;
+    layerList.append(li);
+  }
+  syncOverlayChecks();
   opacityFav.disabled = !dataState.favorability;
   opacityDots.disabled = !dataState.dots;
   updateQuakeCount();
@@ -537,6 +557,13 @@ function status() {
       faults: !!(layers.faults && map.hasLayer(layers.faults)),
       hypocenters: !!(layers.hypocenters && map.hasLayer(layers.hypocenters)),
     },
+    overlays: Array.from(overlays.values()).map((entry) => ({
+      id: entry.spec.id,
+      type: entry.spec.type,
+      name: entry.spec.name,
+      visible: !!(entry.layer && map.hasLayer(entry.layer)),
+      opacity: entry.opacity,
+    })),
     faultsCount: dataState.faults ? dataState.faults.geojson.features.length : 0,
     hypocentersTotal: quakeTotal,
     hypocentersShown: quakeShown,
@@ -1425,6 +1452,253 @@ function renderMagLegend() {
   }
 }
 
+// --- hypothesis overlays ---
+
+function overlayTitleFor(spec) {
+  return spec.group ? `${spec.group}: ${spec.name}` : spec.name;
+}
+
+function buildOverlayLayer(entry) {
+  const { spec } = entry;
+  if (spec.type === 'raster') {
+    entry.url = URL.createObjectURL(entry.blob);
+    const layer = L.imageOverlay(entry.url, spec.bounds, {
+      pane: 'ovraster',
+      opacity: entry.opacity,
+      interactive: false,
+      pmIgnore: true,
+      snapIgnore: true,
+      className: 'pixelated-overlay',
+      alt: spec.name,
+    });
+    layer.on('error', () => {
+      pushError(`${spec.name} image failed to display.`);
+      renderStatus();
+    });
+    return layer;
+  }
+  return L.geoJSON(entry.geojson, {
+    pane: 'ovlines',
+    renderer: overlayLineRenderer,
+    interactive: false,
+    pmIgnore: true,
+    snapIgnore: true,
+    bubblingMouseEvents: false,
+    smoothFactor: 1,
+    style: (feature) => ({ ...featureStyle(spec.style, feature), opacity: entry.opacity }),
+  });
+}
+
+function removeOverlay(id) {
+  const entry = overlays.get(id);
+  if (!entry) return;
+  if (entry.layer) {
+    layerControl.removeLayer(entry.layer);
+    if (map.hasLayer(entry.layer)) map.removeLayer(entry.layer);
+  }
+  if (entry.url) URL.revokeObjectURL(entry.url);
+  overlays.delete(id);
+}
+
+async function clearOverlays(fromIdb) {
+  const ids = Array.from(overlays.keys());
+  for (const id of ids) removeOverlay(id);
+  if (fromIdb) {
+    for (const id of ids) {
+      try {
+        await idbDelete(`overlay:${id}`);
+      } catch (err) {
+        pushError(`Could not forget saved overlay ${id}: ${err.message}`);
+      }
+    }
+  }
+}
+
+async function addOverlay(spec, data, persist, savedAt) {
+  removeOverlay(spec.id);
+  const entry = {
+    spec,
+    blob: data.blob || null,
+    geojson: data.geojson || null,
+    savedAt: savedAt || nowIso(),
+    opacity: Number.isFinite(data.opacity) ? data.opacity : spec.opacity,
+    layer: null,
+    url: null,
+  };
+  entry.layer = buildOverlayLayer(entry);
+  overlays.set(spec.id, entry);
+  layerControl.addOverlay(entry.layer, overlayTitleFor(spec));
+  if (data.visible != null ? data.visible : spec.visible) entry.layer.addTo(map);
+  if (persist) {
+    try {
+      await idbPut({
+        kind: `overlay:${spec.id}`,
+        savedAt: entry.savedAt,
+        spec,
+        blob: entry.blob,
+        geojson: entry.geojson,
+        opacity: entry.opacity,
+      });
+    } catch (err) {
+      pushError(`${spec.name} is loaded but could not be saved in this browser: ${err.message}`);
+    }
+  }
+}
+
+function setOverlayOpacity(id, value) {
+  const entry = overlays.get(id);
+  if (!entry) return;
+  entry.opacity = value;
+  if (entry.spec.type === 'raster') entry.layer.setOpacity(value);
+  else entry.layer.setStyle({ opacity: value });
+}
+
+function persistOverlayOpacity(id) {
+  const entry = overlays.get(id);
+  if (!entry) return;
+  idbPut({
+    kind: `overlay:${id}`,
+    savedAt: entry.savedAt,
+    spec: entry.spec,
+    blob: entry.blob,
+    geojson: entry.geojson,
+    opacity: entry.opacity,
+  }).catch(() => {});
+}
+
+function legendNode(legend) {
+  const wrap = document.createElement('div');
+  wrap.className = 'legend ov-legend';
+  if (!legend) return wrap;
+  if (legend.kind === 'ramp') {
+    const bar = document.createElement('div');
+    bar.className = 'ov-ramp';
+    bar.style.background = `linear-gradient(to right, ${legend.colors.join(', ')})`;
+    bar.setAttribute('role', 'img');
+    bar.setAttribute('aria-label', `Colour scale ${legend.labels.join(' to ')}`);
+    const labels = document.createElement('div');
+    labels.className = 'legend-labels';
+    for (const text of legend.labels) {
+      const span = document.createElement('span');
+      span.textContent = text;
+      labels.append(span);
+    }
+    wrap.append(bar, labels);
+    return wrap;
+  }
+  const list = document.createElement('ul');
+  list.className = 'ov-items';
+  for (const item of legend.items) {
+    const li = document.createElement('li');
+    const sw = document.createElement('span');
+    sw.className = legend.kind === 'lines' ? `ov-swatch-line${item.dash ? ' dash' : ''}` : 'ov-swatch';
+    if (legend.kind === 'lines') sw.style.borderTopColor = item.color;
+    else sw.style.background = item.color;
+    const label = document.createElement('span');
+    label.textContent = item.label;
+    li.append(sw, label);
+    list.append(li);
+  }
+  wrap.append(list);
+  return wrap;
+}
+
+function renderOverlayPanel() {
+  overlayListEl.replaceChildren();
+  overlaySection.hidden = overlays.size === 0;
+  const entries = Array.from(overlays.values()).sort((a, b) => a.spec.order - b.spec.order);
+  let group = null;
+  for (const entry of entries) {
+    const { spec } = entry;
+    if (spec.group !== group) {
+      group = spec.group;
+      if (group) {
+        const h = document.createElement('h3');
+        h.className = 'ov-group';
+        h.textContent = group;
+        overlayListEl.append(h);
+      }
+    }
+    const item = document.createElement('div');
+    item.className = 'ov-item';
+    item.dataset.overlay = spec.id;
+    const check = document.createElement('label');
+    check.className = 'check';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.dataset.overlayToggle = spec.id;
+    box.checked = map.hasLayer(entry.layer);
+    box.addEventListener('change', () => {
+      if (box.checked) entry.layer.addTo(map);
+      else map.removeLayer(entry.layer);
+    });
+    const name = document.createElement('span');
+    name.textContent = spec.name;
+    check.append(box, name);
+    const slider = document.createElement('label');
+    slider.className = 'slider';
+    slider.append('Opacity');
+    const range = document.createElement('input');
+    range.type = 'range';
+    range.min = '0';
+    range.max = '100';
+    range.step = '1';
+    range.value = String(Math.round(entry.opacity * 100));
+    const pct = document.createElement('span');
+    pct.textContent = `${range.value}%`;
+    range.addEventListener('input', () => {
+      pct.textContent = `${range.value}%`;
+      setOverlayOpacity(spec.id, Number(range.value) / 100);
+    });
+    range.addEventListener('change', () => persistOverlayOpacity(spec.id));
+    slider.append(range, pct);
+    item.append(check, slider, legendNode(spec.legend));
+    if (spec.note || spec.hypothesis || spec.source) {
+      const details = document.createElement('details');
+      const summary = document.createElement('summary');
+      summary.textContent = 'About';
+      details.append(summary);
+      for (const [label, text] of [['', spec.note], ['Hypothesis: ', spec.hypothesis], ['Source: ', spec.source]]) {
+        if (!text) continue;
+        const p = document.createElement('p');
+        p.className = 'meta';
+        p.textContent = label + text;
+        details.append(p);
+      }
+      item.append(details);
+    }
+    overlayListEl.append(item);
+  }
+}
+
+function syncOverlayChecks() {
+  for (const box of overlayListEl.querySelectorAll('input[data-overlay-toggle]')) {
+    const entry = overlays.get(box.dataset.overlayToggle);
+    box.checked = !!(entry && entry.layer && map.hasLayer(entry.layer));
+  }
+}
+
+async function applyOverlays(list) {
+  if (!Array.isArray(list)) throw new Error('overlays must be a list');
+  // A bundle's overlay set replaces the previous set, so stale layers do not linger.
+  await clearOverlays(true);
+  const loaded = [];
+  for (let i = 0; i < list.length; i++) {
+    try {
+      const { spec, png, geojson } = normalizeOverlay(list[i], i);
+      if (overlays.has(spec.id)) throw new Error(`duplicate overlay id ${spec.id}`);
+      setLoading(`Loading ${spec.name}…`);
+      await frame();
+      await addOverlay(spec, png ? { blob: base64ToBlob(png) } : { geojson }, true);
+      loaded.push(spec.id);
+    } catch (err) {
+      pushError(`overlay: ${err.message || err}`);
+    }
+  }
+  renderOverlayPanel();
+  return loaded;
+}
+
 async function forgetData() {
   if (!window.confirm('Forget loaded data stored in this browser? Drawn traces are kept.')) return;
   try {
@@ -1442,6 +1716,8 @@ async function forgetData() {
   }
   dataState.faults = null;
   dataState.hypocenters = null;
+  await clearOverlays(false);
+  renderOverlayPanel();
   bundleNote = '';
   favLegend.hidden = true;
   quakeLegend.hidden = true;
@@ -1468,6 +1744,7 @@ async function restoreFromIdb() {
     return;
   }
   let latest = null;
+  const overlayRecs = [];
   for (const rec of records) {
     if (rec.savedAt && (!latest || rec.savedAt > latest)) latest = rec.savedAt;
     try {
@@ -1493,11 +1770,26 @@ async function restoreFromIdb() {
           source: rec.meta && rec.meta.source,
         });
         await showQuakes(cols, false);
+      } else if (typeof rec.kind === 'string' && rec.kind.startsWith('overlay:') && rec.spec) {
+        overlayRecs.push(rec);
       }
     } catch (err) {
       pushError(`Could not restore ${rec.kind || 'a layer'}: ${err.message}`);
     }
   }
+  overlayRecs.sort((a, b) => (a.spec.order || 0) - (b.spec.order || 0));
+  for (const rec of overlayRecs) {
+    try {
+      const spec = { ...rec.spec };
+      if (spec.type === 'raster') spec.bounds = parseBounds(spec.bounds);
+      if (spec.type === 'raster' && !(rec.blob instanceof Blob)) throw new Error('image is missing');
+      if (spec.type === 'lines' && !(rec.geojson && rec.geojson.features)) throw new Error('lines are missing');
+      await addOverlay(spec, { blob: rec.blob, geojson: rec.geojson, opacity: rec.opacity, visible: false }, false, rec.savedAt);
+    } catch (err) {
+      pushError(`Could not restore overlay ${rec.kind}: ${err.message}`);
+    }
+  }
+  renderOverlayPanel();
   restoredAt = latest;
   const when = latest ? new Date(latest).toLocaleString() : 'an unknown date';
   setStatusText(`Restored data from this browser (loaded ${when}).`);
@@ -1655,6 +1947,12 @@ async function applyBundle(data) {
       const cols = columnarQuakes(src.hypocenters);
       if (cols.timeMissing) pushError('hypocenters have no time column; times will be blank');
       await showQuakes(cols, true);
+    }]);
+  }
+  if (src.overlays != null) {
+    jobs.push(['hypothesis layers', async () => {
+      const ids = await applyOverlays(src.overlays);
+      if (!ids.length) throw new Error('no overlay could be loaded');
     }]);
   }
   if (!jobs.length) throw new Error('bundle contained no layers');
@@ -1890,5 +2188,6 @@ window.faultdraw = {
   getTracesGeoJSON,
   loadFiles,
   layers,
+  overlays,
   status,
 };

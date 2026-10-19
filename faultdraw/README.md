@@ -32,6 +32,8 @@ Loading a layer replaces the previous layer of that kind. The last load is store
 | U6 dots PNG | Off, opacity 100% | above favorability |
 | Known faults | On | above the images |
 | Earthquakes | Off (can be heavy) | above known faults, below your traces |
+| Hypothesis rasters (bundle `overlays`) | Off | above U6 dots |
+| Hypothesis lines (bundle `overlays`) | Off | just below known faults |
 
 Your traces are always above those layers. Data layers are not snapping targets. **Snap to my traces** snaps only to traces you drew.
 
@@ -73,7 +75,49 @@ One JSON file:
 }
 ```
 
-Any subset of `layers` may be present. Bounds are EPSG:4326, south-west then north-east, in Leaflet order `[lat, lon]`. PNGs must already be in Web Mercator. `png_base64` is turned into a blob URL (the data URL is not kept). Hypocenters are columnar to keep the file smaller. `time` values are ISO strings.
+Any subset of `layers` may be present. `layers.overlays` is optional (see below). Bounds are EPSG:4326, south-west then north-east, in Leaflet order `[lat, lon]`. PNGs must already be in Web Mercator. `png_base64` is turned into a blob URL (the data URL is not kept). Hypocenters are columnar to keep the file smaller. `time` values are ISO strings.
+
+### Hypothesis overlays (`layers.overlays`)
+
+An optional list of extra layers, each shown as its own entry in the **Hypothesis layers** panel section and the layers control, with an on/off box, an opacity slider, a legend, and an **About** note. All overlays load switched off. The bundle stays `version: 1`; FaultDraw builds without overlay support load the other layers and ignore this key.
+
+```json
+"overlays": [
+  {
+    "id": "grav_iso",
+    "type": "raster",
+    "group": "Gravity",
+    "name": "Isostatic gravity anomaly",
+    "png_base64": "<base64 Web Mercator RGBA PNG>",
+    "bounds": [[south, west], [north, east]],
+    "opacity": 0.65,
+    "visible": false,
+    "legend": { "kind": "ramp", "colors": ["#053061", "#f7f7f7", "#67001f"], "labels": ["-30 mGal", "0", "11 mGal"] },
+    "note": "", "source": "", "hypothesis": ""
+  },
+  {
+    "id": "qfaults_age",
+    "type": "lines",
+    "group": "Fault age",
+    "name": "USGS Quaternary faults by age",
+    "geojson": { "type": "FeatureCollection", "features": [] },
+    "style": {
+      "property": "c",
+      "default": { "color": "#4dd2ff", "weight": 1.4, "opacity": 0.95 },
+      "values": { "historic": { "color": "#e6194b", "weight": 2.6 }, "concealed": { "color": "#ff4fa3", "dashArray": "4 4" } }
+    },
+    "legend": { "kind": "lines", "items": [{ "color": "#e6194b", "label": "Historic" }] }
+  }
+]
+```
+
+- `id`: letters, digits, `_ . -` (max 64). Ids must be unique in a bundle.
+- `type`: `raster` (PNG + bounds, same rules as favorability) or `lines` (LineString / MultiLineString GeoJSON in EPSG:4326).
+- `style` (lines only): `default` path style plus per-value styles picked by `properties[property]`. Allowed keys are `color` (hex), `weight` (0.3–8), `opacity` (0–1), and `dashArray` (numbers).
+- `legend.kind`: `ramp` (`colors` left to right, up to five `labels` spread evenly), `categories` (colour boxes), or `lines` (line swatches, `dash: true` for dashed).
+- Colours must be hex (`#rgb`, `#rrggbb`, `#rrggbbaa`). Labels and notes are shown as text, never HTML.
+
+Loading a bundle that has `overlays` replaces the previous overlay set. Overlays are saved in IndexedDB as `overlay:<id>` records with their last opacity and come back switched off on the next visit. **Forget loaded data** removes them. Overlays are not snapping targets and do not take clicks, so drawing works with any of them on.
 
 ### Separate files
 
@@ -145,4 +189,4 @@ The bottom-left readout is latitude and longitude to 5 decimals, UTM zone 11N ea
 
 ## For tests
 
-After the module loads, `window.faultdraw` is `{ map, getTracesGeoJSON, loadFiles, layers, status }`. `loadFiles` accepts a `FileList` or an array of `File`s and resolves to `status()`. `getTracesGeoJSON()` is the current traces without the export timestamp.
+After the module loads, `window.faultdraw` is `{ map, getTracesGeoJSON, loadFiles, layers, overlays, status }`. `overlays` is a `Map` from overlay id to `{ spec, layer, opacity, ... }`; `status().overlays` lists `{ id, type, name, visible, opacity }`. `loadFiles` accepts a `FileList` or an array of `File`s and resolves to `status()`. `getTracesGeoJSON()` is the current traces without the export timestamp.

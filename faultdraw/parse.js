@@ -244,3 +244,109 @@ export function lineCollection(fc) {
     ignoredOther: split.other,
   };
 }
+
+// --- hypothesis overlays (bundle layers.overlays) ---
+
+const OVERLAY_ID = /^[A-Za-z0-9_.-]{1,64}$/;
+const CSS_HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+const DASH = /^[0-9]+(?:[ ,][0-9]+)*$/;
+
+function str(v, max = 2000) {
+  return v == null ? '' : String(v).slice(0, max);
+}
+
+function cssColor(v, fallback) {
+  return typeof v === 'string' && CSS_HEX.test(v.trim()) ? v.trim() : fallback;
+}
+
+function unitNumber(v, fallback) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : fallback;
+}
+
+/** Path style with only known keys and safe values. */
+export function cleanPathStyle(src, base = {}) {
+  const out = { ...base };
+  if (!src || typeof src !== 'object') return out;
+  if (src.color != null) out.color = cssColor(src.color, out.color || '#ffffff');
+  if (src.weight != null && Number.isFinite(Number(src.weight))) {
+    out.weight = Math.min(8, Math.max(0.3, Number(src.weight)));
+  }
+  if (src.opacity != null) out.opacity = unitNumber(src.opacity, out.opacity == null ? 0.9 : out.opacity);
+  if (src.dashArray != null) {
+    const d = String(src.dashArray).trim();
+    if (DASH.test(d)) out.dashArray = d;
+  }
+  return out;
+}
+
+/** Legend: ramp {colors, labels} | categories {items:[{color,label}]} | lines {items:[{color,label,dash}]}. */
+export function cleanLegend(src) {
+  if (!src || typeof src !== 'object') return null;
+  if (src.kind === 'ramp') {
+    const colors = (Array.isArray(src.colors) ? src.colors : []).map((c) => cssColor(c, null)).filter(Boolean).slice(0, 32);
+    if (colors.length < 2) return null;
+    const labels = (Array.isArray(src.labels) ? src.labels : []).map((s) => str(s, 40)).slice(0, 5);
+    return { kind: 'ramp', colors, labels };
+  }
+  if (src.kind === 'categories' || src.kind === 'lines') {
+    const items = (Array.isArray(src.items) ? src.items : []).slice(0, 24).map((it) => ({
+      color: cssColor(it && it.color, '#cccccc'),
+      label: str(it && it.label, 80),
+      dash: !!(it && it.dash),
+    }));
+    return items.length ? { kind: src.kind, items } : null;
+  }
+  return null;
+}
+
+/**
+ * Validate one overlay entry. Raster: png_base64 + bounds. Lines: geojson FeatureCollection.
+ * @returns {{spec:object, png?:string, geojson?:object}}
+ */
+export function normalizeOverlay(src, index) {
+  if (!src || typeof src !== 'object') throw new Error(`overlay ${index + 1} is not an object`);
+  const type = src.type;
+  if (type !== 'raster' && type !== 'lines') throw new Error(`overlay ${index + 1}: type must be "raster" or "lines"`);
+  const id = typeof src.id === 'string' && OVERLAY_ID.test(src.id) ? src.id : `overlay_${index + 1}`;
+  const spec = {
+    id,
+    type,
+    order: index,
+    group: str(src.group, 60),
+    name: str(src.name, 120) || id,
+    opacity: unitNumber(src.opacity, type === 'raster' ? 0.7 : 0.95),
+    visible: src.visible === true,
+    legend: cleanLegend(src.legend),
+    note: str(src.note),
+    source: str(src.source, 500),
+    hypothesis: str(src.hypothesis, 500),
+  };
+  if (type === 'raster') {
+    spec.bounds = parseBounds(src.bounds);
+    if (typeof src.png_base64 !== 'string' || !src.png_base64.trim()) throw new Error(`${id}: missing png_base64`);
+    return { spec, png: src.png_base64 };
+  }
+  const fc = src.geojson;
+  if (!fc || typeof fc !== 'object') throw new Error(`${id}: lines overlay needs geojson`);
+  const lines = lineCollection(fc).faults;
+  if (!lines) throw new Error(`${id}: geojson has no lines`);
+  const style = src.style && typeof src.style === 'object' ? src.style : {};
+  const def = cleanPathStyle(style.default, { color: '#ffffff', weight: 1.2, opacity: 0.95 });
+  const values = {};
+  if (style.values && typeof style.values === 'object') {
+    for (const [k, v] of Object.entries(style.values).slice(0, 64)) values[String(k)] = cleanPathStyle(v, {});
+  }
+  spec.style = { property: str(style.property, 64), default: def, values };
+  return { spec, geojson: lines };
+}
+
+/** Leaflet path options for one feature of a lines overlay. */
+export function featureStyle(styleSpec, feature) {
+  const props = (feature && feature.properties) || {};
+  const key = styleSpec.property ? props[styleSpec.property] : undefined;
+  const extra = key != null && Object.prototype.hasOwnProperty.call(styleSpec.values, String(key))
+    ? styleSpec.values[String(key)]
+    : {};
+  return { ...styleSpec.default, ...extra };
+}
