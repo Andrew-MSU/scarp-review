@@ -34,6 +34,7 @@ Loading a layer replaces the previous layer of that kind. The last load is store
 | Earthquakes | Off (can be heavy) | above known faults, below your traces |
 | Hypothesis rasters (bundle `overlays`) | Off | above U6 dots |
 | Hypothesis lines (bundle `overlays`) | Off | just below known faults |
+| Interpretation zones (bundle `zones`) | On | above hypothesis rasters, below lines |
 
 Your traces are always above those layers. Data layers are not snapping targets. **Snap to my traces** snaps only to traces you drew.
 
@@ -133,6 +134,14 @@ Loading a bundle that has `overlays` replaces the previous overlay set. Overlays
 
 - **CSV** with a header containing `lon`, `lat`, `mag`, `depth_km` (or `depth`), and `time`. Commas inside quotes are not supported. `.csv.gz` is not read.
 
+### Interpretation zones (`layers.zones`)
+
+Optional GeoJSON FeatureCollection of Polygon / MultiPolygon zones in EPSG:4326, each with `properties.id` (unique), `label`, optional `area_km2`, and optional `label_lonlat` `[lon, lat]` for the label. Bundle v3 has 45 zones (~36 km cells over the valid area, small edge pieces merged into neighbours), labelled by row letter (north to south) and column number (west to east).
+
+Zones load **on**, as dashed yellow outlines with labels, above favorability and below lines, faults, earthquakes, and your traces. **Click a zone** to mark it complete (dark fill, label turns solid with ✓); click again to clear it. While a draw, edit, drag, or delete tool is active the zones ignore clicks, so you can draw straight across them. The **Interpretation zones** panel shows `n/N zones complete`, a progress bar, a show/hide box, and **Reset zone progress**.
+
+Completion state is stored in `localStorage` key `faultdraw.v1.zones` (`{ complete: { id: ISO time } }`). **Export GeoJSON** adds it to the trace file as a top-level `faultdraw_zones` object; **Import traces** restores it (Replace replaces the state, Merge adds to it). The zone polygons themselves are saved in IndexedDB as kind `zones` and removed by **Forget loaded data**; your completion state is kept.
+
 ## Drawing
 
 Toolbar: polyline, edit vertices, drag, delete. Marker, polygon, rectangle, circle, text, cut, and rotate are off.
@@ -189,4 +198,4 @@ The bottom-left readout is latitude and longitude to 5 decimals, UTM zone 11N ea
 
 ## For tests
 
-After the module loads, `window.faultdraw` is `{ map, getTracesGeoJSON, loadFiles, layers, overlays, status }`. `overlays` is a `Map` from overlay id to `{ spec, layer, opacity, ... }`; `status().overlays` lists `{ id, type, name, visible, opacity }`. `loadFiles` accepts a `FileList` or an array of `File`s and resolves to `status()`. `getTracesGeoJSON()` is the current traces without the export timestamp.
+After the module loads, `window.faultdraw` is `{ map, getTracesGeoJSON, loadFiles, layers, overlays, zones, status }`. `overlays` is a `Map` from overlay id to `{ spec, layer, opacity, ... }`; `status().overlays` lists `{ id, type, name, visible, opacity }`. `loadFiles` accepts a `FileList` or an array of `File`s and resolves to `status()`. `getTracesGeoJSON()` is the current traces without the export timestamp.

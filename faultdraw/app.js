@@ -3,6 +3,7 @@
 // This file never fetches or posts user files.
 
 import { wgs84ToUtm11N } from './utm.js';
+import { createZoneTracker } from './zones.js';
 import { idbPut, idbGetAll, idbClear, idbDelete } from './idb.js';
 import {
   sidecarCandidates,
@@ -269,6 +270,37 @@ const Readout = L.Control.extend({
 });
 const readout = new Readout();
 readout.addTo(map);
+
+// Interpretation zones (bundle layers.zones). Created after storage helpers are hoisted.
+const zonesProgressEl = $('zones-progress');
+const zoneTracker = createZoneTracker({
+  map,
+  L,
+  layerControl,
+  storageGet: (k) => storageGet(k),
+  storageSet: (k, v) => storageSet(k, v),
+  isBlocked: () => geomanActive(),
+  onChange: () => renderZones(),
+});
+
+function renderZones() {
+  const { done, total } = zoneTracker.progress();
+  $('zones-section').hidden = total === 0;
+  zonesProgressEl.textContent = total ? `${done}/${total} zones complete` : '';
+  const bar = $('zones-bar');
+  if (bar) bar.style.width = total ? `${(100 * done) / total}%` : '0%';
+}
+
+async function showZones(fc, persist, savedAt) {
+  const clean = zoneTracker.setLayer(fc, true);
+  if (persist) {
+    try {
+      await idbPut({ kind: 'zones', savedAt: savedAt || nowIso(), geojson: clean });
+    } catch (err) {
+      pushError(`Could not save zones: ${err.message}`);
+    }
+  }
+}
 L.control.scale({ position: 'bottomleft', metric: true, imperial: true }).addTo(map);
 
 // --- small helpers ---
@@ -564,6 +596,7 @@ function status() {
       visible: !!(entry.layer && map.hasLayer(entry.layer)),
       opacity: entry.opacity,
     })),
+    zones: { ...zoneTracker.progress(), visible: !!(zoneTracker.layer && map.hasLayer(zoneTracker.layer)) },
     faultsCount: dataState.faults ? dataState.faults.geojson.features.length : 0,
     hypocentersTotal: quakeTotal,
     hypocentersShown: quakeShown,
@@ -952,6 +985,7 @@ function exportTraces() {
     exported,
     features: gj.features,
   };
+  if (zoneTracker.progress().total) payload.faultdraw_zones = zoneTracker.exportState();
   downloadText(`faultdraw_traces_${exportStamp(new Date())}.geojson`, JSON.stringify(payload, null, 2));
   storageSet(LAST_EXPORT_KEY, exported);
   storageSet(EXPORT_DIGEST_KEY, hashStr(JSON.stringify(gj)));
@@ -973,7 +1007,15 @@ function importTraces(data, mode) {
   if (!split.faults && split.quakes) {
     throw new Error('This file looks like hypocenters. Use Load data.');
   }
-  if (!split.faults) throw new Error('No LineString traces in this file.');
+  let zoneNote = '';
+  if (data && data.faultdraw_zones && zoneTracker) {
+    const n = zoneTracker.importState(data.faultdraw_zones, mode);
+    zoneNote = ` Zone progress imported (${n} complete).`;
+  }
+  if (!split.faults) {
+    if (zoneNote) { setStatusText(zoneNote.trim()); return; }
+    throw new Error('No LineString traces in this file.');
+  }
   const planned = [];
   for (const feature of split.faults.features) {
     for (const part of planTraceParts(feature)) planned.push(part);
@@ -1005,7 +1047,7 @@ function importTraces(data, mode) {
   commitNow();
   const skippedIds = skipped ? ` Skipped ${skipped} with an id you already have.` : '';
   const ignoredPts = split.quakes ? ' Point features were left out — use Load data for hypocenters.' : '';
-  setStatusText(`Imported ${added} traces.${skippedIds}${ignoredPts}`);
+  setStatusText(`Imported ${added} traces.${skippedIds}${ignoredPts}${zoneNote}`);
 }
 
 function askImportMode() {
@@ -1114,6 +1156,7 @@ function onModeChange(e) {
 }
 
 map.on('pm:globaldrawmodetoggled pm:globaleditmodetoggled pm:globalremovalmodetoggled pm:globaldragmodetoggled', onModeChange);
+map.on('pm:globaldrawmodetoggled pm:globaleditmodetoggled pm:globalremovalmodetoggled pm:globaldragmodetoggled', () => zoneTracker.syncPointer());
 map.on('pm:drawstart pm:drawend', onModeChange);
 
 map.on('pm:keyevent', (ev) => {
@@ -1718,6 +1761,8 @@ async function forgetData() {
   dataState.hypocenters = null;
   await clearOverlays(false);
   renderOverlayPanel();
+  zoneTracker.unmount();
+  renderZones();
   bundleNote = '';
   favLegend.hidden = true;
   quakeLegend.hidden = true;
@@ -1770,6 +1815,8 @@ async function restoreFromIdb() {
           source: rec.meta && rec.meta.source,
         });
         await showQuakes(cols, false);
+      } else if (rec.kind === 'zones' && rec.geojson) {
+        await showZones(rec.geojson, false);
       } else if (typeof rec.kind === 'string' && rec.kind.startsWith('overlay:') && rec.spec) {
         overlayRecs.push(rec);
       }
@@ -1949,6 +1996,9 @@ async function applyBundle(data) {
       await showQuakes(cols, true);
     }]);
   }
+  if (src.zones) {
+    jobs.push(['zones', async () => { await showZones(src.zones, true); }]);
+  }
   if (src.overlays != null) {
     jobs.push(['hypothesis layers', async () => {
       const ids = await applyOverlays(src.overlays);
@@ -2090,6 +2140,19 @@ $('btn-undo').addEventListener('click', () => undo());
 $('btn-redo').addEventListener('click', () => redo());
 $('btn-export').addEventListener('click', () => exportTraces());
 $('btn-clear').addEventListener('click', () => clearTraces());
+$('btn-zones-reset').addEventListener('click', () => {
+  if (!zoneTracker.progress().done) return;
+  if (window.confirm('Mark every zone as not complete?')) zoneTracker.reset();
+});
+$('zones-show').addEventListener('change', (event) => {
+  const lyr = zoneTracker.layer;
+  if (!lyr) return;
+  if (event.target.checked) lyr.addTo(map); else map.removeLayer(lyr);
+});
+map.on('overlayadd overlayremove', () => {
+  const lyr = zoneTracker.layer;
+  $('zones-show').checked = !!(lyr && map.hasLayer(lyr));
+});
 $('btn-import').addEventListener('click', () => $('file-import').click());
 $('file-import').addEventListener('change', async () => {
   const input = $('file-import');
@@ -2189,5 +2252,7 @@ window.faultdraw = {
   loadFiles,
   layers,
   overlays,
+  zones: zoneTracker,
   status,
 };
+renderZones();
