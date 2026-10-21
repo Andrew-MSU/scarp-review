@@ -55,6 +55,15 @@
       <p id="dots-meta" class="meta"></p>
     </section>
 
+    <section id="zones-section" hidden>
+      <h2>Interpretation zones</h2>
+      <p id="zones-progress" data-testid="zones-progress"></p>
+      <div class="zones-meter"><div id="zones-bar"></div></div>
+      <label class="check"><input type="checkbox" id="zones-show" checked> Show zones</label>
+      <p class="hint">Click a zone to mark it complete (dark fill, ✓); click again to undo. Clicks pass to the drawing tool while a draw or edit tool is active. Progress is saved in this browser and included in Export GeoJSON; Import traces restores it.</p>
+      <button type="button" id="btn-zones-reset" class="danger">Reset zone progress</button>
+    </section>
+
     <section id="overlay-section" hidden>
       <h2>Hypothesis layers</h2>
       <p class="hint">Off when loaded. Tick a layer (or use the layers control) to show it. Rasters draw above favorability; lines draw just under known faults.</p>
