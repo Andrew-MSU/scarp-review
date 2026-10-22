@@ -55,6 +55,14 @@
       <p id="dots-meta" class="meta"></p>
     </section>
 
+    <section id="cand-section" hidden>
+      <h2>Candidate traces (QA/QC)</h2>
+      <p id="cand-progress" data-testid="cand-progress"></p>
+      <label class="check"><input type="checkbox" id="cand-show" checked> Show candidates</label>
+      <p class="hint">Magenta lines are code-generated candidates. Click one to reject it (grey dashed); click again to restore. Clicks pass to the drawing tool while a draw or edit tool is active. Draw any missing faults with the line tool as usual. Export GeoJSON includes your rejections and your new traces.</p>
+      <button type="button" id="btn-cand-reset" class="danger">Restore all candidates</button>
+    </section>
+
     <section id="zones-section" hidden>
       <h2>Interpretation zones</h2>
       <p id="zones-progress" data-testid="zones-progress"></p>

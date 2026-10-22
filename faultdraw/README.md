@@ -199,3 +199,12 @@ The bottom-left readout is latitude and longitude to 5 decimals, UTM zone 11N ea
 ## For tests
 
 After the module loads, `window.faultdraw` is `{ map, getTracesGeoJSON, loadFiles, layers, overlays, zones, status }`. `overlays` is a `Map` from overlay id to `{ spec, layer, opacity, ... }`; `status().overlays` lists `{ id, type, name, visible, opacity }`. `loadFiles` accepts a `FileList` or an array of `File`s and resolves to `status()`. `getTracesGeoJSON()` is the current traces without the export timestamp.
+
+## Candidate review (accept/reject)
+
+A bundle may include `layers.candidates`, a GeoJSON FeatureCollection of LineStrings, each with a unique
+`properties.trace_id` (optional: `length_km`, `mean_q`, `ds249_scarp`, `dem_slope_break`). The candidates draw in magenta.
+Click a line to **reject** it (grey dashed), and click it again to restore it. Clicks are ignored while a draw or edit tool is active,
+so you can still add new traces with the normal draw tool. Progress is shown in the "Candidates" panel. Your state
+is saved in the browser and travels in the export as `faultdraw_candidates: {source, rejected:[trace_id...], total, updated}`,
+next to your drawn traces. `layers.known_faults.color` (a `#rrggbb` value) overrides the default known-fault colour.

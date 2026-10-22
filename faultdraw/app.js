@@ -4,6 +4,7 @@
 
 import { wgs84ToUtm11N } from './utm.js';
 import { createZoneTracker } from './zones.js';
+import { createCandidateReview } from './candidates.js';
 import { idbPut, idbGetAll, idbClear, idbDelete } from './idb.js';
 import {
   sidecarCandidates,
@@ -298,6 +299,33 @@ async function showZones(fc, persist, savedAt) {
       await idbPut({ kind: 'zones', savedAt: savedAt || nowIso(), geojson: clean });
     } catch (err) {
       pushError(`Could not save zones: ${err.message}`);
+    }
+  }
+}
+// Candidate traces QA/QC (bundle layers.candidates): click to reject / restore.
+const candReview = createCandidateReview({
+  map,
+  L,
+  layerControl,
+  storageGet: (k) => storageGet(k),
+  storageSet: (k, v) => storageSet(k, v),
+  isBlocked: () => geomanActive(),
+  onChange: () => renderCandidates(),
+});
+
+function renderCandidates() {
+  const { rejected, total } = candReview.progress();
+  $('cand-section').hidden = total === 0;
+  $('cand-progress').textContent = total ? `${total - rejected} kept, ${rejected} rejected of ${total} candidates` : '';
+}
+
+async function showCandidates(fc, persist, savedAt) {
+  const clean = candReview.setLayer(fc, true);
+  if (persist) {
+    try {
+      await idbPut({ kind: 'candidates', savedAt: savedAt || nowIso(), geojson: clean });
+    } catch (err) {
+      pushError(`Could not save candidates: ${err.message}`);
     }
   }
 }
@@ -986,6 +1014,7 @@ function exportTraces() {
     features: gj.features,
   };
   if (zoneTracker.progress().total) payload.faultdraw_zones = zoneTracker.exportState();
+  if (candReview.progress().total) payload.faultdraw_candidates = candReview.exportState();
   downloadText(`faultdraw_traces_${exportStamp(new Date())}.geojson`, JSON.stringify(payload, null, 2));
   storageSet(LAST_EXPORT_KEY, exported);
   storageSet(EXPORT_DIGEST_KEY, hashStr(JSON.stringify(gj)));
@@ -1011,6 +1040,10 @@ function importTraces(data, mode) {
   if (data && data.faultdraw_zones && zoneTracker) {
     const n = zoneTracker.importState(data.faultdraw_zones, mode);
     zoneNote = ` Zone progress imported (${n} complete).`;
+  }
+  if (data && data.faultdraw_candidates && candReview) {
+    const n = candReview.importState(data.faultdraw_candidates, mode);
+    zoneNote += ` Candidate rejections imported (${n}).`;
   }
   if (!split.faults) {
     if (zoneNote) { setStatusText(zoneNote.trim()); return; }
@@ -1156,7 +1189,7 @@ function onModeChange(e) {
 }
 
 map.on('pm:globaldrawmodetoggled pm:globaleditmodetoggled pm:globalremovalmodetoggled pm:globaldragmodetoggled', onModeChange);
-map.on('pm:globaldrawmodetoggled pm:globaleditmodetoggled pm:globalremovalmodetoggled pm:globaldragmodetoggled', () => zoneTracker.syncPointer());
+map.on('pm:globaldrawmodetoggled pm:globaleditmodetoggled pm:globalremovalmodetoggled pm:globaldragmodetoggled', () => { zoneTracker.syncPointer(); candReview.syncPointer(); });
 map.on('pm:drawstart pm:drawend', onModeChange);
 
 map.on('pm:keyevent', (ev) => {
@@ -1285,7 +1318,7 @@ function showFaults(fc, meta, persist) {
     snapIgnore: true,
     bubblingMouseEvents: false,
     smoothFactor: 1,
-    style: { color: '#5a3a1a', weight: 1.5, opacity: 0.9 },
+    style: { color: /^#[0-9a-fA-F]{6}$/.test((meta && meta.color) || '') ? meta.color : '#5a3a1a', weight: 1.5, opacity: 0.9 },
     filter: (feature) => {
       const t = feature && feature.geometry && feature.geometry.type;
       return t === 'LineString' || t === 'MultiLineString';
@@ -1763,6 +1796,7 @@ async function forgetData() {
   renderOverlayPanel();
   zoneTracker.unmount();
   renderZones();
+renderCandidates();
   bundleNote = '';
   favLegend.hidden = true;
   quakeLegend.hidden = true;
@@ -1817,6 +1851,8 @@ async function restoreFromIdb() {
         await showQuakes(cols, false);
       } else if (rec.kind === 'zones' && rec.geojson) {
         await showZones(rec.geojson, false);
+      } else if (rec.kind === 'candidates' && rec.geojson) {
+        await showCandidates(rec.geojson, false);
       } else if (typeof rec.kind === 'string' && rec.kind.startsWith('overlay:') && rec.spec) {
         overlayRecs.push(rec);
       }
@@ -1986,7 +2022,7 @@ async function applyBundle(data) {
       if (lines.ignoredPoints) {
         pushError(`known_faults: ignored ${lines.ignoredPoints} point feature(s)`);
       }
-      showFaults(lines.faults, { name: src.known_faults.name || '' }, true);
+      showFaults(lines.faults, { name: src.known_faults.name || '', color: src.known_faults.color || '' }, true);
     }]);
   }
   if (src.hypocenters) {
@@ -1998,6 +2034,9 @@ async function applyBundle(data) {
   }
   if (src.zones) {
     jobs.push(['zones', async () => { await showZones(src.zones, true); }]);
+  }
+  if (src.candidates) {
+    jobs.push(['candidate traces', async () => { await showCandidates(src.candidates, true); }]);
   }
   if (src.overlays != null) {
     jobs.push(['hypothesis layers', async () => {
@@ -2140,6 +2179,15 @@ $('btn-undo').addEventListener('click', () => undo());
 $('btn-redo').addEventListener('click', () => redo());
 $('btn-export').addEventListener('click', () => exportTraces());
 $('btn-clear').addEventListener('click', () => clearTraces());
+$('btn-cand-reset').addEventListener('click', () => {
+  if (!candReview.progress().rejected) return;
+  if (window.confirm('Restore every rejected candidate?')) candReview.reset();
+});
+$('cand-show').addEventListener('change', (event) => {
+  const lyr = candReview.layer;
+  if (!lyr) return;
+  if (event.target.checked) lyr.addTo(map); else map.removeLayer(lyr);
+});
 $('btn-zones-reset').addEventListener('click', () => {
   if (!zoneTracker.progress().done) return;
   if (window.confirm('Mark every zone as not complete?')) zoneTracker.reset();
@@ -2253,6 +2301,8 @@ window.faultdraw = {
   layers,
   overlays,
   zones: zoneTracker,
+  candidates: candReview,
   status,
 };
 renderZones();
+renderCandidates();
