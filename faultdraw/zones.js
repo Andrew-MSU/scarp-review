@@ -1,4 +1,4 @@
-// Interpretation zone tracker: click a zone to mark it complete.
+// Interpretation zone tracker: shift-click a zone to mark it complete.
 // Zone polygons come from bundle layers.zones (and are kept in IndexedDB like other inputs).
 // Completion state lives in localStorage and rides along in trace exports.
 
@@ -99,6 +99,7 @@ export function createZoneTracker({ map, L, layerControl, storageGet, storageSet
       });
       poly.on('click', (e) => {
         if (isBlocked && isBlocked()) return;
+        if (!(e.originalEvent && e.originalEvent.shiftKey)) return; // plain clicks pass through (candidates, map)
         L.DomEvent.stop(e);
         toggle(id);
       });
@@ -172,7 +173,35 @@ export function createZoneTracker({ map, L, layerControl, storageGet, storageSet
     onChange && onChange();
   }
 
+  // Shift-click anywhere (e.g. on a candidate line drawn above the zones): toggle the zone under the point.
+  function inRing(ring, x, y) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i], [xj, yj] = ring[j];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+  function zoneAt(latlng) {
+    if (!fc || !group || !map.hasLayer(group)) return null;
+    for (const f of fc.features) {
+      const g = f.geometry; if (!g) continue;
+      const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+      for (const p of polys) {
+        if (p.length && inRing(p[0], latlng.lng, latlng.lat) && !p.slice(1).some((h) => inRing(h, latlng.lng, latlng.lat))) return f.properties.id;
+      }
+    }
+    return null;
+  }
+  map.on('click', (e) => {
+    if (!(e.originalEvent && e.originalEvent.shiftKey)) return;
+    if (isBlocked && isBlocked()) return;
+    const id = zoneAt(e.latlng);
+    if (id != null && byId.has(id)) toggle(id);
+  });
+
   return {
+    zoneAt,
     setLayer, unmount, toggle, progress, exportState, importState, reset, syncPointer,
     get geojson() { return fc; },
     get layer() { return group; },
