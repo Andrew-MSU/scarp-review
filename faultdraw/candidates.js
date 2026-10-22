@@ -79,6 +79,7 @@ export function createCandidateReview({ map, L, layerControl, storageGet, storag
       const lyr = L.geoJSON(f, { renderer, pane: 'candidates', pmIgnore: true, snapIgnore: true, interactive: true, style: () => styleFor(id) });
       lyr.on('click', (e) => {
         if (isBlocked && isBlocked()) return;
+        if (e.originalEvent && e.originalEvent.shiftKey) return; // shift-click is for zones; let it bubble to the map
         L.DomEvent.stop(e);
         toggle(id);
       });

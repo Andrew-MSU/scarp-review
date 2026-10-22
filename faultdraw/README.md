@@ -138,7 +138,7 @@ Loading a bundle that has `overlays` replaces the previous overlay set. Overlays
 
 Optional GeoJSON FeatureCollection of Polygon / MultiPolygon zones in EPSG:4326, each with `properties.id` (unique), `label`, optional `area_km2`, and optional `label_lonlat` `[lon, lat]` for the label. Bundle v3 has 45 zones (~36 km cells over the valid area, small edge pieces merged into neighbours), labelled by row letter (north to south) and column number (west to east).
 
-Zones load **on**, as dashed yellow outlines with labels, above favorability and below lines, faults, earthquakes, and your traces. **Click a zone** to mark it complete (dark fill, label turns solid with ✓); click again to clear it. While a draw, edit, drag, or delete tool is active the zones ignore clicks, so you can draw straight across them. The **Interpretation zones** panel shows `n/N zones complete`, a progress bar, a show/hide box, and **Reset zone progress**.
+Zones load **on**, as dashed yellow outlines with labels, above favorability and below lines, faults, earthquakes, and your traces. **Shift-click a zone** to mark it complete (dark fill, label turns solid with ✓); shift-click again to clear it. A plain click on a zone does nothing, so it never collides with candidate review. Shift-click works even on top of a candidate line. While a draw, edit, drag, or delete tool is active the zones ignore clicks, so you can draw straight across them. The **Interpretation zones** panel shows `n/N zones complete`, a progress bar, a show/hide box, and **Reset zone progress**.
 
 Completion state is stored in `localStorage` key `faultdraw.v1.zones` (`{ complete: { id: ISO time } }`). **Export GeoJSON** adds it to the trace file as a top-level `faultdraw_zones` object; **Import traces** restores it (Replace replaces the state, Merge adds to it). The zone polygons themselves are saved in IndexedDB as kind `zones` and removed by **Forget loaded data**; your completion state is kept.
 
@@ -204,7 +204,7 @@ After the module loads, `window.faultdraw` is `{ map, getTracesGeoJSON, loadFile
 
 A bundle may include `layers.candidates`, a GeoJSON FeatureCollection of LineStrings, each with a unique
 `properties.trace_id` (optional: `length_km`, `mean_q`, `ds249_scarp`, `dem_slope_break`). The candidates draw in magenta.
-Click a line to **reject** it (grey dashed), and click it again to restore it. Clicks are ignored while a draw or edit tool is active,
+Click a line to **reject** it (grey dashed), and click it again to restore it. Shift-click never toggles a candidate; it toggles the zone underneath. Clicks are ignored while a draw or edit tool is active,
 so you can still add new traces with the normal draw tool. Progress is shown in the "Candidates" panel. Your state
 is saved in the browser and travels in the export as `faultdraw_candidates: {source, rejected:[trace_id...], total, updated}`,
 next to your drawn traces. `layers.known_faults.color` (a `#rrggbb` value) overrides the default known-fault colour.
