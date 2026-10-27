@@ -33,6 +33,7 @@ Loading a layer replaces the previous layer of that kind. The last load is store
 | Known faults | On | above the images |
 | Earthquakes | Off (can be heavy) | above known faults, below your traces |
 | Hypothesis rasters (bundle `overlays`) | Off | above U6 dots |
+| Hypothesis polygons (bundle `overlays`) | Off | above hypothesis rasters, below zones |
 | Hypothesis lines (bundle `overlays`) | Off | just below known faults |
 | Interpretation zones (bundle `zones`) | On | above hypothesis rasters, below lines |
 
@@ -113,7 +114,9 @@ An optional list of extra layers, each shown as its own entry in the **Hypothesi
 ```
 
 - `id`: letters, digits, `_ . -` (max 64). Ids must be unique in a bundle.
-- `type`: `raster` (PNG + bounds, same rules as favorability) or `lines` (LineString / MultiLineString GeoJSON in EPSG:4326).
+- `type`: `raster` (PNG + bounds, same rules as favorability), `lines` (LineString / MultiLineString GeoJSON in EPSG:4326), or `polygons` (Polygon / MultiPolygon GeoJSON in EPSG:4326, e.g. geologic units).
+- `polygons` only: `style` values may also set `fillColor` (hex). The opacity slider sets the fill opacity (default 0.35); outlines follow it. Optional `hover: { "property": "k", "labels": ["..."] }` shows a plain-text label for the polygon under the cursor (bottom left) while the layer is on: `labels[properties[property]]` when `labels` is given, else the property value. Polygons take no clicks, so drawing and candidate clicks work through them.
+- `fallback_for` (optional): id of another overlay this one stands in for (for example a PNG of a `polygons` layer for builds that cannot draw polygons). It is skipped when that overlay loads.
 - `style` (lines only): `default` path style plus per-value styles picked by `properties[property]`. Allowed keys are `color` (hex), `weight` (0.3–8), `opacity` (0–1), and `dashArray` (numbers).
 - `legend.kind`: `ramp` (`colors` left to right, up to five `labels` spread evenly), `categories` (colour boxes), or `lines` (line swatches, `dash: true` for dashed).
 - Colours must be hex (`#rgb`, `#rrggbb`, `#rrggbbaa`). Labels and notes are shown as text, never HTML.

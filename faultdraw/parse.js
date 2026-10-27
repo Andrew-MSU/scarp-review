@@ -277,7 +277,33 @@ export function cleanPathStyle(src, base = {}) {
     const d = String(src.dashArray).trim();
     if (DASH.test(d)) out.dashArray = d;
   }
+  if (src.fillColor != null) out.fillColor = cssColor(src.fillColor, out.fillColor || out.color || '#cccccc');
+  if (src.fillOpacity != null) out.fillOpacity = unitNumber(src.fillOpacity, out.fillOpacity == null ? 0.35 : out.fillOpacity);
   return out;
+}
+
+function validRing(r) {
+  return Array.isArray(r) && r.length >= 4 && r.every((p) => Array.isArray(p) && p.length >= 2
+    && Number.isFinite(p[0]) && Number.isFinite(p[1]) && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90);
+}
+
+function validPolygon(rings) {
+  return Array.isArray(rings) && rings.length > 0 && rings.every(validRing);
+}
+
+/** Keep only Polygon / MultiPolygon features (EPSG:4326) with sane coordinates. */
+export function polygonCollection(fc) {
+  const src = fc && fc.type === 'Feature' ? [fc] : (fc && Array.isArray(fc.features) ? fc.features : []);
+  const features = [];
+  let other = 0;
+  for (const f of src) {
+    const g = f && f.geometry;
+    const ok = g && ((g.type === 'Polygon' && validPolygon(g.coordinates))
+      || (g.type === 'MultiPolygon' && Array.isArray(g.coordinates) && g.coordinates.length > 0 && g.coordinates.every(validPolygon)));
+    if (!ok) { other += 1; continue; }
+    features.push({ type: 'Feature', properties: f.properties && typeof f.properties === 'object' ? f.properties : {}, geometry: g });
+  }
+  return { polygons: features.length ? { type: 'FeatureCollection', features } : null, ignoredOther: other };
 }
 
 /** Legend: ramp {colors, labels} | categories {items:[{color,label}]} | lines {items:[{color,label,dash}]}. */
@@ -301,13 +327,15 @@ export function cleanLegend(src) {
 }
 
 /**
- * Validate one overlay entry. Raster: png_base64 + bounds. Lines: geojson FeatureCollection.
+ * Validate one overlay entry. Raster: png_base64 + bounds. Lines / polygons: geojson FeatureCollection.
  * @returns {{spec:object, png?:string, geojson?:object}}
  */
 export function normalizeOverlay(src, index) {
   if (!src || typeof src !== 'object') throw new Error(`overlay ${index + 1} is not an object`);
   const type = src.type;
-  if (type !== 'raster' && type !== 'lines') throw new Error(`overlay ${index + 1}: type must be "raster" or "lines"`);
+  if (type !== 'raster' && type !== 'lines' && type !== 'polygons') {
+    throw new Error(`overlay ${index + 1}: type must be "raster", "lines" or "polygons"`);
+  }
   const id = typeof src.id === 'string' && OVERLAY_ID.test(src.id) ? src.id : `overlay_${index + 1}`;
   const spec = {
     id,
@@ -315,20 +343,39 @@ export function normalizeOverlay(src, index) {
     order: index,
     group: str(src.group, 60),
     name: str(src.name, 120) || id,
-    opacity: unitNumber(src.opacity, type === 'raster' ? 0.7 : 0.95),
+    opacity: unitNumber(src.opacity, type === 'raster' ? 0.7 : type === 'polygons' ? 0.35 : 0.95),
     visible: src.visible === true,
     legend: cleanLegend(src.legend),
     note: str(src.note),
     source: str(src.source, 500),
     hypothesis: str(src.hypothesis, 500),
   };
+  // A layer that stands in for another overlay on builds that cannot show it (skipped when that overlay loads).
+  if (typeof src.fallback_for === 'string' && OVERLAY_ID.test(src.fallback_for)) spec.fallback_for = src.fallback_for;
   if (type === 'raster') {
     spec.bounds = parseBounds(src.bounds);
     if (typeof src.png_base64 !== 'string' || !src.png_base64.trim()) throw new Error(`${id}: missing png_base64`);
     return { spec, png: src.png_base64 };
   }
   const fc = src.geojson;
-  if (!fc || typeof fc !== 'object') throw new Error(`${id}: lines overlay needs geojson`);
+  if (!fc || typeof fc !== 'object') throw new Error(`${id}: ${type} overlay needs geojson`);
+  if (type === 'polygons') {
+    const { polygons } = polygonCollection(fc);
+    if (!polygons) throw new Error(`${id}: geojson has no polygons`);
+    const style = src.style && typeof src.style === 'object' ? src.style : {};
+    const def = cleanPathStyle(style.default, { color: '#333333', weight: 0.5, opacity: 0.6, fillColor: '#cccccc' });
+    const values = {};
+    if (style.values && typeof style.values === 'object') {
+      for (const [k, v] of Object.entries(style.values).slice(0, 64)) values[String(k)] = cleanPathStyle(v, {});
+    }
+    spec.style = { property: str(style.property, 64), default: def, values };
+    const hover = src.hover && typeof src.hover === 'object' ? src.hover : {};
+    spec.hover = {
+      property: str(hover.property, 64),
+      labels: Array.isArray(hover.labels) ? hover.labels.slice(0, 20000).map((t) => str(t, 200)) : null,
+    };
+    return { spec, geojson: polygons };
+  }
   const lines = lineCollection(fc).faults;
   if (!lines) throw new Error(`${id}: geojson has no lines`);
   const style = src.style && typeof src.style === 'object' ? src.style : {};
@@ -349,4 +396,54 @@ export function featureStyle(styleSpec, feature) {
     ? styleSpec.values[String(key)]
     : {};
   return { ...styleSpec.default, ...extra };
+}
+
+/** Hover text for one polygon feature (plain text; null when the overlay has no hover property). */
+export function hoverLabel(hoverSpec, feature) {
+  if (!hoverSpec || !hoverSpec.property) return null;
+  const v = ((feature && feature.properties) || {})[hoverSpec.property];
+  if (v == null) return null;
+  if (hoverSpec.labels) {
+    const t = hoverSpec.labels[Number(v)];
+    return t == null ? String(v) : t;
+  }
+  return String(v);
+}
+
+function ringHit(ring, x, y) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0]; const yi = ring[i][1]; const xj = ring[j][0]; const yj = ring[j][1];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** Bounding-box index for point lookup in a polygons FeatureCollection. */
+export function polygonIndex(fc) {
+  const items = [];
+  for (const f of fc.features) {
+    const g = f.geometry;
+    const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+    let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
+    for (const p of polys) for (const [x, y] of p[0]) {
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    items.push({ f, polys, x0, y0, x1, y1 });
+  }
+  return items;
+}
+
+/** Feature under lon/lat (holes respected), or null. */
+export function polygonAt(index, x, y) {
+  for (const it of index) {
+    if (x < it.x0 || x > it.x1 || y < it.y0 || y > it.y1) continue;
+    for (const p of it.polys) {
+      if (!ringHit(p[0], x, y)) continue;
+      let hole = false;
+      for (let k = 1; k < p.length; k++) if (ringHit(p[k], x, y)) { hole = true; break; }
+      if (!hole) return it.f;
+    }
+  }
+  return null;
 }
