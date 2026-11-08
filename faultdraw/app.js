@@ -17,6 +17,9 @@ import {
   lineCollection,
   normalizeOverlay,
   featureStyle,
+  hoverLabel,
+  polygonIndex,
+  polygonAt,
 } from './parse.js';
 
 const L = window.L;
@@ -132,6 +135,8 @@ makePane('fav', 350);
 makePane('dots', 360);
 // Hypothesis overlays: rasters above favorability and dots, lines just below known faults.
 makePane('ovraster', 365).style.pointerEvents = 'none';
+// Hypothesis polygons (e.g. geologic units): above rasters, below zones, lines, candidates and traces.
+makePane('ovpoly', 370).style.pointerEvents = 'none';
 makePane('ovlines', 415).style.pointerEvents = 'none';
 makePane('faults', 420);
 makePane('quakes', 430);
@@ -141,6 +146,7 @@ const drawRenderer = L.svg({ pane: 'drawings' });
 const faultRenderer = L.svg({ pane: 'faults' });
 const quakeRenderer = L.canvas({ pane: 'quakes', tolerance: 3 });
 const overlayLineRenderer = L.canvas({ pane: 'ovlines' });
+const overlayPolyRenderer = L.canvas({ pane: 'ovpoly' });
 
 const tracesGroup = L.featureGroup([], { pmIgnore: true, snapIgnore: true });
 layers.traces = tracesGroup;
@@ -271,6 +277,24 @@ const Readout = L.Control.extend({
 });
 const readout = new Readout();
 readout.addTo(map);
+
+// Hover label for polygon overlays (looked up from the cursor position; the polygons themselves take no events).
+const HoverLabel = L.Control.extend({
+  options: { position: 'bottomleft' },
+  onAdd() {
+    const div = L.DomUtil.create('div', 'leaflet-control readout hover-label');
+    div.id = 'hover-label';
+    div.hidden = true;
+    return div;
+  },
+  setText(text) {
+    const el = this.getContainer();
+    el.textContent = text || '';
+    el.hidden = !text;
+  },
+});
+const hoverLabelCtl = new HoverLabel();
+hoverLabelCtl.addTo(map);
 
 // Interpretation zones (bundle layers.zones). Created after storage helpers are hoisted.
 const zonesProgressEl = $('zones-progress');
@@ -536,6 +560,28 @@ function renderReadout(latlng) {
 }
 
 map.on('mousemove', (e) => renderReadout(e.latlng));
+
+let hoverPending = null;
+function renderHover(latlng) {
+  let text = '';
+  if (latlng) {
+    const entries = Array.from(overlays.values()).filter((en) => en.spec.type === 'polygons' && en.index && en.layer && map.hasLayer(en.layer));
+    entries.sort((a, b) => b.spec.order - a.spec.order);
+    for (const en of entries) {
+      const f = polygonAt(en.index, latlng.lng, latlng.lat);
+      const label = f && hoverLabel(en.spec.hover, f);
+      if (label) { text = label; break; }
+    }
+  }
+  hoverLabelCtl.setText(text);
+}
+map.on('mousemove', (e) => {
+  const first = hoverPending == null;
+  hoverPending = e.latlng;
+  if (first) requestAnimationFrame(() => { const ll = hoverPending; hoverPending = null; renderHover(ll); });
+});
+map.on('mouseout', () => { hoverPending = null; renderHover(null); });
+map.on('layerremove', () => { if (hoverLabelCtl.getContainer() && !hoverLabelCtl.getContainer().hidden) renderHover(lastLatLng); });
 map.on('zoomend', () => renderReadout(lastLatLng));
 renderReadout(null);
 
@@ -1534,6 +1580,18 @@ function overlayTitleFor(spec) {
   return spec.group ? `${spec.group}: ${spec.name}` : spec.name;
 }
 
+// Opacity slider drives the fill; outlines stay a little stronger so unit edges remain readable.
+function polygonStyle(spec, feature, opacity) {
+  const st = featureStyle(spec.style, feature);
+  return {
+    ...st,
+    fill: true,
+    fillColor: st.fillColor || st.color,
+    fillOpacity: opacity,
+    opacity: Math.min(1, (st.opacity == null ? 0.6 : st.opacity) * Math.min(1, opacity * 2)),
+  };
+}
+
 function buildOverlayLayer(entry) {
   const { spec } = entry;
   if (spec.type === 'raster') {
@@ -1552,6 +1610,19 @@ function buildOverlayLayer(entry) {
       renderStatus();
     });
     return layer;
+  }
+  if (spec.type === 'polygons') {
+    entry.index = polygonIndex(entry.geojson);
+    return L.geoJSON(entry.geojson, {
+      pane: 'ovpoly',
+      renderer: overlayPolyRenderer,
+      interactive: false,
+      pmIgnore: true,
+      snapIgnore: true,
+      bubblingMouseEvents: false,
+      smoothFactor: 1,
+      style: (feature) => polygonStyle(spec, feature, entry.opacity),
+    });
   }
   return L.geoJSON(entry.geojson, {
     pane: 'ovlines',
@@ -1626,6 +1697,7 @@ function setOverlayOpacity(id, value) {
   if (!entry) return;
   entry.opacity = value;
   if (entry.spec.type === 'raster') entry.layer.setOpacity(value);
+  else if (entry.spec.type === 'polygons') entry.layer.setStyle((f) => polygonStyle(entry.spec, f, value));
   else entry.layer.setStyle({ opacity: value });
 }
 
@@ -1759,9 +1831,15 @@ async function applyOverlays(list) {
   // A bundle's overlay set replaces the previous set, so stale layers do not linger.
   await clearOverlays(true);
   const loaded = [];
+  // Overlays this build can show; a `fallback_for` stand-in is skipped when its target is among them.
+  const supported = new Set();
+  for (let i = 0; i < list.length; i++) {
+    try { supported.add(normalizeOverlay(list[i], i).spec.id); } catch { /* reported below */ }
+  }
   for (let i = 0; i < list.length; i++) {
     try {
       const { spec, png, geojson } = normalizeOverlay(list[i], i);
+      if (spec.fallback_for && supported.has(spec.fallback_for)) continue;
       if (overlays.has(spec.id)) throw new Error(`duplicate overlay id ${spec.id}`);
       setLoading(`Loading ${spec.name}…`);
       await frame();
@@ -1867,6 +1945,7 @@ async function restoreFromIdb() {
       if (spec.type === 'raster') spec.bounds = parseBounds(spec.bounds);
       if (spec.type === 'raster' && !(rec.blob instanceof Blob)) throw new Error('image is missing');
       if (spec.type === 'lines' && !(rec.geojson && rec.geojson.features)) throw new Error('lines are missing');
+      if (spec.type === 'polygons' && !(rec.geojson && rec.geojson.features)) throw new Error('polygons are missing');
       await addOverlay(spec, { blob: rec.blob, geojson: rec.geojson, opacity: rec.opacity, visible: false }, false, rec.savedAt);
     } catch (err) {
       pushError(`Could not restore overlay ${rec.kind}: ${err.message}`);
